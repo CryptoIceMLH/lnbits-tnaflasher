@@ -1,6 +1,6 @@
 # Tech Nerd Army Web Flasher
 
-A LNbits extension for paywalled ESP32 firmware flashing. Users pay with Lightning to flash their NerdQAxe mining devices.
+A LNbits extension for paywalled ESP32 firmware flashing. Users pay with Lightning to flash their  devices.
 
 ## Features
 
@@ -8,7 +8,7 @@ A LNbits extension for paywalled ESP32 firmware flashing. Users pay with Lightni
 - **Web Serial Flashing**: Flash ESP32 devices directly from the browser
 - **Token Protection**: Firmware only accessible after payment
 - **Admin Dashboard**: Track flashes, revenue, and manage pricing
-- **Multiple Devices**: Support for NerdQAxe+, NerdQAxe+2, NerdQX, NerdOCTAXE+, NerdOCTAXE Gamma
+
 
 ## Supported Devices
 
