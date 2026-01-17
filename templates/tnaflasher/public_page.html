@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tech Nerd Army Web Flasher</title>
-  <link href="https://fonts.googleapis.com/css?family=Material+Icons" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Icons&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.prod.css" rel="stylesheet">
   <style>
     :root {
@@ -25,6 +25,18 @@
       background-color: var(--bg-primary);
       min-height: 100vh;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* Prevent Material Icons ligatures from affecting regular text */
+    body, p, span, div, h1, h2, h3, h4, h5, h6, .q-card, .text-h6, .text-subtitle1 {
+      font-feature-settings: "liga" 0;
+      -webkit-font-feature-settings: "liga" 0;
+    }
+
+    /* Only allow ligatures in icon elements */
+    .material-icons, .q-icon {
+      font-feature-settings: "liga" 1 !important;
+      -webkit-font-feature-settings: "liga" 1 !important;
     }
 
     .fixed-bottom {
@@ -192,28 +204,15 @@
 </head>
 <body>
   <div id="vue" v-cloak class="q-pa-md">
+    <!-- Header -->
+    <div class="text-center q-mb-lg">
+      <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
+      <p class="text-subtitle1 text-tna-secondary">Pay with Lightning <q-icon name="bolt" color="orange" /> Flash your device</p>
+    </div>
+
     <div class="row q-col-gutter-md justify-center">
-      <div class="col-12 col-md-8 col-lg-6">
-
-        <!-- Header -->
-        <div class="text-center q-mb-lg">
-          <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
-          <p class="text-subtitle1 text-tna-secondary">Pay with Lightning ⚡ Flash your miner</p>
-        </div>
-
-        <!-- News/Bulletin Board -->
-        <q-card v-if="bulletins.length > 0" class="q-mb-md tna-card bulletin-board">
-          <q-card-section>
-            <div class="row items-center q-mb-sm">
-              <q-icon name="campaign" color="orange" size="sm" class="q-mr-sm" />
-              <span class="text-h6 text-tna-primary">News & Updates</span>
-            </div>
-            <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item">
-              <div class="bulletin-date">${ formatBulletinDate(bulletin.created_at) }</div>
-              <div class="text-tna-secondary">${ bulletin.message }</div>
-            </div>
-          </q-card-section>
-        </q-card>
+      <!-- Main Flasher Column -->
+      <div class="col-12 col-lg-7">
 
         <!-- Wallet Error -->
         <q-banner v-if="walletError" class="bg-negative text-white q-mb-md" rounded>
@@ -433,21 +432,39 @@
           </q-card-section>
         </q-card>
 
-        <!-- Footer -->
-        <div class="text-center q-mt-lg q-mb-md">
-          <p class="text-tna-muted text-caption">
-            Powered by <span class="text-tna-accent">Tech Nerd Army</span> ⚡
-            <a href="https://www.molonlabe.holdings/" target="_blank" class="text-tna-accent" style="text-decoration: none;">molonlabe.holdings</a>
-          </p>
-        </div>
-
-        <!-- Toast Notification -->
-        <q-banner v-if="notification" :class="'bg-' + notification.color + ' text-white fixed-bottom q-ma-md'" rounded style="z-index: 9999;">
-          ${ notification.message }
-        </q-banner>
-
       </div>
+
+      <!-- Sidebar Column - News/Bulletins -->
+      <div v-if="bulletins.length > 0" class="col-12 col-lg-4">
+        <q-card class="tna-card bulletin-board" style="position: sticky; top: 16px;">
+          <q-card-section>
+            <div class="row items-center q-mb-sm">
+              <q-icon name="campaign" color="orange" size="sm" class="q-mr-sm" />
+              <span class="text-h6 text-tna-primary">News &amp; Updates</span>
+            </div>
+            <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item">
+              <div class="bulletin-date">${ formatBulletinDate(bulletin.created_at) }</div>
+              <div class="text-tna-secondary">${ bulletin.message }</div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+
     </div>
+
+    <!-- Footer -->
+    <div class="text-center q-mt-lg q-mb-md">
+      <p class="text-tna-muted text-caption">
+        Powered by <span class="text-tna-accent">Tech Nerd Army</span> <q-icon name="bolt" color="orange" size="xs" />
+        <a href="https://www.molonlabe.holdings/" target="_blank" class="text-tna-accent" style="text-decoration: none;">molonlabe.holdings</a>
+      </p>
+    </div>
+
+    <!-- Toast Notification -->
+    <q-banner v-if="notification" :class="'bg-' + notification.color + ' text-white fixed-bottom q-ma-md'" rounded style="z-index: 9999;">
+      ${ notification.message }
+    </q-banner>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
