@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+{% from "macros.jinja" import window_vars with context %}
+
+{% block page %}
+<div class="row q-col-gutter-md">
+  <div class="col-12 q-mb-md">
+    <h3 class="q-mb-none">
+      <img src="/tnaflasher/static/images/tnaflasher.png" alt="TNA" style="height: 40px; vertical-align: middle;" onerror="this.style.display='none'">
+      Tech Nerd Army Web Flasher
+    </h3>
+    <p class="text-subtitle1 text-grey">Admin Dashboard</p>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="col-12 col-md-3">
+    <q-card>
+      <q-card-section class="text-center">
+        <div class="text-h4">${ stats.total_flashes }</div>
+        <div class="text-subtitle2">Total Flashes</div>
+      </q-card-section>
+    </q-card>
+  </div>
+  <div class="col-12 col-md-3">
+    <q-card>
+      <q-card-section class="text-center">
+        <div class="text-h4">${ formatSats(stats.total_sats) }</div>
+        <div class="text-subtitle2">Total SATS Earned</div>
+      </q-card-section>
+    </q-card>
+  </div>
+  <div class="col-12 col-md-3">
+    <q-card>
+      <q-card-section class="text-center">
+        <div class="text-h4">${ stats.today_flashes }</div>
+        <div class="text-subtitle2">Today's Flashes</div>
+      </q-card-section>
+    </q-card>
+  </div>
+  <div class="col-12 col-md-3">
+    <q-card>
+      <q-card-section class="text-center">
+        <div class="text-h4">${ priceSats }</div>
+        <div class="text-subtitle2">Price (SATS)</div>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <!-- Configuration -->
+  <div class="col-12 col-md-6">
+    <q-card>
+      <q-card-section>
+        <div class="text-h6 q-mb-md">Configuration</div>
+
+        <div class="row q-col-gutter-md">
+          <div class="col-12">
+            <q-input
+              v-model.number="priceSats"
+              type="number"
+              label="Flash Price (SATS)"
+              outlined
+              dense
+            >
+              <template v-slot:append>
+                <q-btn flat dense icon="save" @click="savePrice" :loading="savingPrice">
+                  <q-tooltip>Save Price</q-tooltip>
+                </q-btn>
+              </template>
+            </q-input>
+          </div>
+
+          <div class="col-12">
+            <q-select
+              v-model="selectedWallet"
+              :options="walletOptions"
+              label="Receiving Wallet"
+              outlined
+              dense
+              emit-value
+              map-options
+              @update:model-value="saveWallet"
+            />
+          </div>
+
+          <div class="col-12">
+            <q-input
+              v-model="publicUrl"
+              label="Public Flasher URL"
+              outlined
+              dense
+              readonly
+            >
+              <template v-slot:append>
+                <q-btn flat dense icon="content_copy" @click="copyPublicUrl">
+                  <q-tooltip>Copy URL</q-tooltip>
+                </q-btn>
+              </template>
+            </q-input>
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <!-- Available Firmware -->
+  <div class="col-12 col-md-6">
+    <q-card>
+      <q-card-section>
+        <div class="text-h6 q-mb-md">Available Firmware</div>
+
+        <q-list bordered separator>
+          <q-item v-for="device in devices" :key="device.id">
+            <q-item-section>
+              <q-item-label>${ device.name }</q-item-label>
+              <q-item-label caption>
+                ${ device.versions.length > 0 ? device.versions.join(', ') : 'No firmware uploaded' }
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+
+        <div class="q-mt-md text-caption text-grey">
+          To add firmware, place .bin files in: <br>
+          <code>tnaflasher/static/firmware/{DeviceID}/{version}.bin</code>
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <!-- Recent Flash Requests -->
+  <div class="col-12">
+    <q-card>
+      <q-card-section>
+        <div class="row items-center q-mb-md">
+          <div class="text-h6">Recent Flash Requests</div>
+          <q-space></q-space>
+          <q-btn flat icon="refresh" @click="loadRequests" :loading="loadingRequests">
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
+        </div>
+
+        <q-table
+          :rows="requests"
+          :columns="requestColumns"
+          row-key="id"
+          :loading="loadingRequests"
+          :pagination="{ rowsPerPage: 20 }"
+          flat
+          bordered
+        >
+          <template v-slot:body-cell-status="props">
+            <q-td :props="props">
+              <q-badge
+                :color="getStatusColor(props.row.status)"
+                :label="props.row.status"
+              />
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-created_at="props">
+            <q-td :props="props">
+              ${ formatDate(props.row.created_at) }
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-amount_sats="props">
+            <q-td :props="props">
+              ${ formatSats(props.row.amount_sats) }
+            </q-td>
+          </template>
+        </q-table>
+      </q-card-section>
+    </q-card>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ window_vars(user) }}
+<script>
+  window.app = Vue.createApp({
+    el: '#vue',
+    mixins: [windowMixin],
+    delimiters: ['${', '}'],
+
+    data() {
+      return {
+        stats: {
+          total_flashes: 0,
+          total_sats: 0,
+          today_flashes: 0,
+          pending_count: 0
+        },
+        priceSats: 5000,
+        savingPrice: false,
+        selectedWallet: null,
+        walletOptions: [],
+        devices: [],
+        requests: [],
+        loadingRequests: false,
+        requestColumns: [
+          { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true },
+          { name: 'device', label: 'Device', field: 'device', align: 'left' },
+          { name: 'version', label: 'Version', field: 'version', align: 'left' },
+          { name: 'amount_sats', label: 'Amount', field: 'amount_sats', align: 'right' },
+          { name: 'status', label: 'Status', field: 'status', align: 'center' },
+        ]
+      }
+    },
+
+    computed: {
+      publicUrl() {
+        if (!this.selectedWallet) return 'Select a wallet first'
+        return `${window.location.origin}/tnaflasher/${this.selectedWallet}`
+      }
+    },
+
+    methods: {
+      formatSats(sats) {
+        return new Intl.NumberFormat().format(sats)
+      },
+
+      formatDate(timestamp) {
+        if (!timestamp) return '-'
+        return new Date(timestamp * 1000).toLocaleString()
+      },
+
+      getStatusColor(status) {
+        switch (status) {
+          case 'flashed': return 'positive'
+          case 'paid': return 'info'
+          case 'pending': return 'warning'
+          case 'expired': return 'negative'
+          default: return 'grey'
+        }
+      },
+
+      async loadStats() {
+        try {
+          const response = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/stats',
+            this.g.user.wallets[0].adminkey
+          )
+          this.stats = response.data
+        } catch (e) {
+          console.error('Failed to load stats:', e)
+        }
+      },
+
+      async loadPrice() {
+        try {
+          const response = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/price',
+            this.g.user.wallets[0].adminkey
+          )
+          this.priceSats = response.data.price_sats
+        } catch (e) {
+          console.error('Failed to load price:', e)
+        }
+      },
+
+      async savePrice() {
+        this.savingPrice = true
+        try {
+          await LNbits.api.request(
+            'POST',
+            `/tnaflasher/api/v1/admin/price?price_sats=${this.priceSats}`,
+            this.g.user.wallets[0].adminkey
+          )
+          this.$q.notify({ type: 'positive', message: 'Price saved!' })
+        } catch (e) {
+          LNbits.utils.notifyApiError(e)
+        }
+        this.savingPrice = false
+      },
+
+      async loadWallet() {
+        try {
+          const response = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/wallet',
+            this.g.user.wallets[0].adminkey
+          )
+          this.selectedWallet = response.data.wallet_id || null
+        } catch (e) {
+          console.error('Failed to load wallet:', e)
+        }
+      },
+
+      async saveWallet(walletId) {
+        try {
+          await LNbits.api.request(
+            'POST',
+            `/tnaflasher/api/v1/admin/wallet?wallet_id=${walletId}`,
+            this.g.user.wallets[0].adminkey
+          )
+          this.$q.notify({ type: 'positive', message: 'Wallet saved!' })
+        } catch (e) {
+          LNbits.utils.notifyApiError(e)
+        }
+      },
+
+      async loadDevices() {
+        try {
+          const response = await LNbits.api.request('GET', '/tnaflasher/api/v1/devices')
+          this.devices = response.data.devices
+        } catch (e) {
+          console.error('Failed to load devices:', e)
+        }
+      },
+
+      async loadRequests() {
+        this.loadingRequests = true
+        try {
+          const response = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/requests',
+            this.g.user.wallets[0].adminkey
+          )
+          this.requests = response.data
+        } catch (e) {
+          console.error('Failed to load requests:', e)
+        }
+        this.loadingRequests = false
+      },
+
+      copyPublicUrl() {
+        if (!this.selectedWallet) {
+          this.$q.notify({ type: 'warning', message: 'Select a wallet first' })
+          return
+        }
+        navigator.clipboard.writeText(this.publicUrl)
+        this.$q.notify({ type: 'positive', message: 'URL copied!' })
+      }
+    },
+
+    async created() {
+      // Build wallet options from user's wallets
+      this.walletOptions = this.g.user.wallets.map(w => ({
+        label: w.name,
+        value: w.id
+      }))
+
+      // Load all data
+      await this.loadStats()
+      await this.loadPrice()
+      await this.loadWallet()
+      await this.loadDevices()
+      await this.loadRequests()
+    }
+  })
+
+  window.app.mount('#vue')
+</script>
+{% endblock %}
