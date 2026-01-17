@@ -1,595 +1,626 @@
-{% extends "public.html" %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Nerd Army Web Flasher</title>
+  <link href="https://fonts.googleapis.com/css?family=Material+Icons" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.prod.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #1d1d1d;
+      min-height: 100vh;
+    }
+    .fixed-bottom {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="vue" class="q-pa-md">
+    <div class="row q-col-gutter-md justify-center">
+      <div class="col-12 col-md-8 col-lg-6">
 
-{% block page %}
-<div class="row q-col-gutter-md justify-center">
-  <div class="col-12 col-md-8 col-lg-6">
-
-    <!-- Header -->
-    <div class="text-center q-mb-lg">
-      <h3 class="q-mb-sm">Tech Nerd Army Web Flasher</h3>
-      <p class="text-subtitle1 text-grey">Pay with Lightning, flash your miner</p>
-    </div>
-
-    <!-- Wallet Error -->
-    <q-banner v-if="walletError" class="bg-negative text-white q-mb-md" rounded>
-      <template v-slot:avatar>
-        <q-icon name="error" />
-      </template>
-      ${ walletError }
-    </q-banner>
-
-    <!-- Browser Check -->
-    <q-banner v-if="walletValid && !isChromium && !browserWarningDismissed" class="bg-amber-8 text-white q-mb-md" rounded>
-      <template v-slot:avatar>
-        <q-icon name="info" />
-      </template>
-      <div class="row items-center">
-        <div class="col">
-          Web Serial API requires Chrome, Edge, Brave, or Opera browser.
+        <!-- Header -->
+        <div class="text-center q-mb-lg">
+          <h3 class="q-mb-sm text-white">Tech Nerd Army Web Flasher</h3>
+          <p class="text-subtitle1 text-grey">Pay with Lightning, flash your miner</p>
         </div>
-        <q-btn flat dense icon="close" @click="browserWarningDismissed = true" class="q-ml-sm" />
+
+        <!-- Wallet Error -->
+        <q-banner v-if="walletError" class="bg-negative text-white q-mb-md" rounded>
+          <template v-slot:avatar>
+            <q-icon name="error" />
+          </template>
+          ${ walletError }
+        </q-banner>
+
+        <!-- Browser Check -->
+        <q-banner v-if="walletValid && !isChromium && !browserWarningDismissed" class="bg-amber-8 text-white q-mb-md" rounded>
+          <template v-slot:avatar>
+            <q-icon name="info" />
+          </template>
+          <div class="row items-center">
+            <div class="col">
+              Web Serial API requires Chrome, Edge, Brave, or Opera browser.
+            </div>
+            <q-btn flat dense icon="close" @click="browserWarningDismissed = true" class="q-ml-sm" />
+          </div>
+        </q-banner>
+
+        <!-- Step 1: Connect Device -->
+        <q-card v-if="walletValid" class="q-mb-md">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge color="primary" class="q-mr-sm">1</q-badge>
+              <span class="text-h6">Connect Device</span>
+            </div>
+
+            <div v-if="!connected">
+              <q-btn
+                color="primary"
+                icon="usb"
+                label="Connect via USB"
+                @click="connectDevice"
+                :loading="connecting"
+                :disable="!isChromium"
+              />
+            </div>
+
+            <div v-else class="row items-center">
+              <q-icon name="check_circle" color="positive" size="sm" class="q-mr-sm" />
+              <span class="text-positive">Connected: ${ chipInfo }</span>
+              <q-space />
+              <q-btn flat dense color="negative" label="Disconnect" @click="disconnectDevice" />
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Step 2: Select Device & Firmware -->
+        <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !connected }">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge :color="connected ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
+              <span class="text-h6">Select Firmware</span>
+            </div>
+
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-6">
+                <q-select
+                  v-model="selectedDevice"
+                  :options="deviceOptions"
+                  label="Device"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  :disable="!connected || paid"
+                  @update:model-value="onDeviceChange"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-select
+                  v-model="selectedVersion"
+                  :options="versionOptions"
+                  label="Version"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  :disable="!connected || !selectedDevice || paid"
+                />
+              </div>
+              <div class="col-12">
+                <q-checkbox
+                  v-model="keepConfig"
+                  label="Keep existing configuration (WiFi, pool settings, etc.)"
+                  :disable="!connected || paid"
+                />
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Step 3: Pay -->
+        <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !selectedVersion }">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge :color="selectedVersion ? 'primary' : 'grey'" class="q-mr-sm">3</q-badge>
+              <span class="text-h6">Pay to Unlock</span>
+            </div>
+
+            <!-- Not yet paid -->
+            <div v-if="!paid">
+              <div class="text-center q-mb-md">
+                <div class="text-h5 text-weight-bold">${ formatSats(priceSats) } SATS</div>
+              </div>
+
+              <!-- No invoice yet -->
+              <div v-if="!invoice" class="text-center">
+                <q-btn
+                  color="warning"
+                  icon="flash_on"
+                  label="Generate Invoice"
+                  @click="createInvoice"
+                  :loading="creatingInvoice"
+                  :disable="!selectedVersion"
+                />
+              </div>
+
+              <!-- Invoice created, waiting for payment -->
+              <div v-else class="text-center">
+                <div class="q-mb-md">
+                  <img :src="qrCodeUrl" alt="QR Code" style="max-width: 250px; width: 100%;" />
+                </div>
+
+                <q-input
+                  v-model="invoice"
+                  label="Lightning Invoice"
+                  outlined
+                  dense
+                  readonly
+                  class="q-mb-sm"
+                >
+                  <template v-slot:append>
+                    <q-btn flat dense icon="content_copy" @click="copyInvoice">
+                      <q-tooltip>Copy</q-tooltip>
+                    </q-btn>
+                  </template>
+                </q-input>
+
+                <div class="text-caption text-grey q-mb-md">
+                  Expires in: ${ expiryCountdown }
+                </div>
+
+                <q-spinner-dots v-if="checkingPayment" color="primary" size="2em" />
+                <div v-if="checkingPayment" class="text-caption">Waiting for payment...</div>
+              </div>
+            </div>
+
+            <!-- Paid! -->
+            <div v-else class="text-center">
+              <q-icon name="check_circle" color="positive" size="xl" />
+              <div class="text-h6 text-positive q-mt-sm">Payment Confirmed!</div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Step 4: Flash -->
+        <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !paid }">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
+              <span class="text-h6">Flash Device</span>
+            </div>
+
+            <div v-if="!flashing && !flashComplete" class="text-center">
+              <q-btn
+                color="positive"
+                icon="flash_on"
+                label="Start Flashing"
+                @click="startFlashing"
+                :disable="!paid || !flashToken"
+                size="lg"
+              />
+            </div>
+
+            <!-- Flashing progress -->
+            <div v-if="flashing">
+              <q-linear-progress
+                :value="flashProgress / 100"
+                size="25px"
+                color="primary"
+                class="q-mb-md"
+              >
+                <div class="absolute-full flex flex-center">
+                  <q-badge color="white" text-color="primary" :label="flashProgress + '%'" />
+                </div>
+              </q-linear-progress>
+              <div class="text-center text-caption">${ flashStatus }</div>
+            </div>
+
+            <!-- Flash complete -->
+            <div v-if="flashComplete" class="text-center">
+              <q-icon name="check_circle" color="positive" size="xl" />
+              <div class="text-h6 text-positive q-mt-sm">Flash Complete!</div>
+              <p class="text-grey q-mt-sm">Your device has been flashed successfully.</p>
+              <q-btn flat color="primary" label="Flash Another Device" @click="resetAll" class="q-mt-md" />
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Terminal Output -->
+        <q-card v-if="walletValid && terminalOutput.length > 0">
+          <q-card-section>
+            <div class="text-h6 q-mb-md">Console Output</div>
+            <div class="bg-dark text-white q-pa-sm" style="font-family: monospace; max-height: 200px; overflow-y: auto;">
+              <div v-for="(line, i) in terminalOutput" :key="i">${ line }</div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Toast Notification -->
+        <q-banner v-if="notification" :class="'bg-' + notification.color + ' text-white fixed-bottom q-ma-md'" rounded style="z-index: 9999;">
+          ${ notification.message }
+        </q-banner>
+
       </div>
-    </q-banner>
-
-    <!-- Step 1: Connect Device -->
-    <q-card v-if="walletValid" class="q-mb-md">
-      <q-card-section>
-        <div class="row items-center q-mb-md">
-          <q-badge color="primary" class="q-mr-sm">1</q-badge>
-          <span class="text-h6">Connect Device</span>
-        </div>
-
-        <div v-if="!connected">
-          <q-btn
-            color="primary"
-            icon="usb"
-            label="Connect via USB"
-            @click="connectDevice"
-            :loading="connecting"
-            :disable="!isChromium"
-          />
-        </div>
-
-        <div v-else class="row items-center">
-          <q-icon name="check_circle" color="positive" size="sm" class="q-mr-sm" />
-          <span class="text-positive">Connected: ${ chipInfo }</span>
-          <q-space />
-          <q-btn flat dense color="negative" label="Disconnect" @click="disconnectDevice" />
-        </div>
-      </q-card-section>
-    </q-card>
-
-    <!-- Step 2: Select Device & Firmware -->
-    <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !connected }">
-      <q-card-section>
-        <div class="row items-center q-mb-md">
-          <q-badge :color="connected ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
-          <span class="text-h6">Select Firmware</span>
-        </div>
-
-        <div class="row q-col-gutter-md">
-          <div class="col-12 col-sm-6">
-            <q-select
-              v-model="selectedDevice"
-              :options="deviceOptions"
-              label="Device"
-              outlined
-              dense
-              emit-value
-              map-options
-              :disable="!connected || paid"
-              @update:model-value="onDeviceChange"
-            />
-          </div>
-          <div class="col-12 col-sm-6">
-            <q-select
-              v-model="selectedVersion"
-              :options="versionOptions"
-              label="Version"
-              outlined
-              dense
-              emit-value
-              map-options
-              :disable="!connected || !selectedDevice || paid"
-            />
-          </div>
-          <div class="col-12">
-            <q-checkbox
-              v-model="keepConfig"
-              label="Keep existing configuration (WiFi, pool settings, etc.)"
-              :disable="!connected || paid"
-            />
-          </div>
-        </div>
-      </q-card-section>
-    </q-card>
-
-    <!-- Step 3: Pay -->
-    <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !selectedVersion }">
-      <q-card-section>
-        <div class="row items-center q-mb-md">
-          <q-badge :color="selectedVersion ? 'primary' : 'grey'" class="q-mr-sm">3</q-badge>
-          <span class="text-h6">Pay to Unlock</span>
-        </div>
-
-        <!-- Not yet paid -->
-        <div v-if="!paid">
-          <div class="text-center q-mb-md">
-            <div class="text-h5 text-weight-bold">${ formatSats(priceSats) } SATS</div>
-          </div>
-
-          <!-- No invoice yet -->
-          <div v-if="!invoice" class="text-center">
-            <q-btn
-              color="warning"
-              icon="flash_on"
-              label="Generate Invoice"
-              @click="createInvoice"
-              :loading="creatingInvoice"
-              :disable="!selectedVersion"
-            />
-          </div>
-
-          <!-- Invoice created, waiting for payment -->
-          <div v-else class="text-center">
-            <div class="q-mb-md">
-              <img :src="qrCodeUrl" alt="QR Code" style="max-width: 250px; width: 100%;" />
-            </div>
-
-            <q-input
-              v-model="invoice"
-              label="Lightning Invoice"
-              outlined
-              dense
-              readonly
-              class="q-mb-sm"
-            >
-              <template v-slot:append>
-                <q-btn flat dense icon="content_copy" @click="copyInvoice">
-                  <q-tooltip>Copy</q-tooltip>
-                </q-btn>
-              </template>
-            </q-input>
-
-            <div class="text-caption text-grey q-mb-md">
-              Expires in: ${ expiryCountdown }
-            </div>
-
-            <q-spinner-dots v-if="checkingPayment" color="primary" size="2em" />
-            <div v-if="checkingPayment" class="text-caption">Waiting for payment...</div>
-          </div>
-        </div>
-
-        <!-- Paid! -->
-        <div v-else class="text-center">
-          <q-icon name="check_circle" color="positive" size="xl" />
-          <div class="text-h6 text-positive q-mt-sm">Payment Confirmed!</div>
-        </div>
-      </q-card-section>
-    </q-card>
-
-    <!-- Step 4: Flash -->
-    <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !paid }">
-      <q-card-section>
-        <div class="row items-center q-mb-md">
-          <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
-          <span class="text-h6">Flash Device</span>
-        </div>
-
-        <div v-if="!flashing && !flashComplete" class="text-center">
-          <q-btn
-            color="positive"
-            icon="flash_on"
-            label="Start Flashing"
-            @click="startFlashing"
-            :disable="!paid || !flashToken"
-            size="lg"
-          />
-        </div>
-
-        <!-- Flashing progress -->
-        <div v-if="flashing">
-          <q-linear-progress
-            :value="flashProgress / 100"
-            size="25px"
-            color="primary"
-            class="q-mb-md"
-          >
-            <div class="absolute-full flex flex-center">
-              <q-badge color="white" text-color="primary" :label="flashProgress + '%'" />
-            </div>
-          </q-linear-progress>
-          <div class="text-center text-caption">${ flashStatus }</div>
-        </div>
-
-        <!-- Flash complete -->
-        <div v-if="flashComplete" class="text-center">
-          <q-icon name="check_circle" color="positive" size="xl" />
-          <div class="text-h6 text-positive q-mt-sm">Flash Complete!</div>
-          <p class="text-grey q-mt-sm">Your device has been flashed successfully.</p>
-          <q-btn flat color="primary" label="Flash Another Device" @click="resetAll" class="q-mt-md" />
-        </div>
-      </q-card-section>
-    </q-card>
-
-    <!-- Terminal Output -->
-    <q-card v-if="walletValid && terminalOutput.length > 0">
-      <q-card-section>
-        <div class="text-h6 q-mb-md">Console Output</div>
-        <div class="bg-dark text-white q-pa-sm" style="font-family: monospace; max-height: 200px; overflow-y: auto;">
-          <div v-for="(line, i) in terminalOutput" :key="i">${ line }</div>
-        </div>
-      </q-card-section>
-    </q-card>
-
-    <!-- Toast Notification -->
-    <q-banner v-if="notification" :class="'bg-' + notification.color + ' text-white fixed-bottom q-ma-md'" rounded style="z-index: 9999;">
-      ${ notification.message }
-    </q-banner>
-
+    </div>
   </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script type="module">
-import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.6/bundle.js';
-window.ESPLoader = ESPLoader;
-window.Transport = Transport;
-</script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-<script>
-const WALLET_ID = '{{ wallet_id }}'
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.umd.prod.js"></script>
+  <script type="module">
+    import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.6/bundle.js';
+    window.ESPLoader = ESPLoader;
+    window.Transport = Transport;
+  </script>
+  <script>
+    const WALLET_ID = '{{ wallet_id }}'
+    const API_BASE = window.location.origin
 
-window.app = Vue.createApp({
-  el: '#vue',
-  delimiters: ['${', '}'],
-
-  data() {
-    return {
-      // Wallet validation
-      walletValid: false,
-      walletError: '',
-
-      // Browser check
-      isChromium: !!navigator.serial,
-      browserWarningDismissed: false,
-
-      // Connection
-      connected: false,
-      connecting: false,
-      port: null,
-      transport: null,
-      loader: null,
-      chipInfo: '',
-
-      // Device selection
-      devices: [],
-      selectedDevice: null,
-      selectedVersion: null,
-      keepConfig: true,
-
-      // Payment
-      priceSats: 5000,
-      invoice: null,
-      paymentHash: null,
-      expiresAt: null,
-      expiryCountdown: '',
-      checkingPayment: false,
-      creatingInvoice: false,
-      paid: false,
-      flashToken: null,
-
-      // Flashing
-      flashing: false,
-      flashProgress: 0,
-      flashStatus: '',
-      flashComplete: false,
-      terminalOutput: [],
-
-      // Notifications
-      notification: null
-    }
-  },
-
-  computed: {
-    deviceOptions() {
-      return this.devices.map(d => ({
-        label: d.name,
-        value: d.id
-      }))
-    },
-
-    versionOptions() {
-      const device = this.devices.find(d => d.id === this.selectedDevice)
-      if (!device) return []
-      return device.versions.map(v => ({
-        label: v,
-        value: v
-      }))
-    },
-
-    qrCodeUrl() {
-      if (!this.invoice) return ''
-      return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(this.invoice.toUpperCase())}`
-    }
-  },
-
-  methods: {
-    notify(type, message) {
-      const colorMap = { positive: 'positive', negative: 'negative', warning: 'warning', info: 'info' }
-      this.notification = { color: colorMap[type] || 'info', message }
-      setTimeout(() => { this.notification = null }, 3000)
-    },
-
-    formatSats(sats) {
-      return new Intl.NumberFormat().format(sats)
-    },
-
-    log(message) {
-      this.terminalOutput.push(message)
-      console.log(message)
-    },
-
-    async loadDevices() {
-      try {
-        const response = await LNbits.api.request('GET', '/tnaflasher/api/v1/devices')
-        this.devices = response.data.devices
-      } catch (e) {
-        console.error('Failed to load devices:', e)
-      }
-    },
-
-    async loadPrice() {
-      try {
-        const response = await LNbits.api.request('GET', '/tnaflasher/api/v1/price')
-        this.priceSats = response.data.price_sats
-      } catch (e) {
-        console.error('Failed to load price:', e)
-      }
-    },
-
-    async connectDevice() {
-      this.connecting = true
-      try {
-        // Request serial port
-        this.port = await navigator.serial.requestPort()
-        this.log('Port selected')
-
-        // Create transport
-        this.transport = new window.Transport(this.port, true)
-
-        // Create loader
-        this.loader = new window.ESPLoader({
-          transport: this.transport,
-          baudrate: 115200,
-          romBaudrate: 115200,
-          terminal: {
-            clean: () => {},
-            writeLine: (msg) => this.log(msg),
-            write: (msg) => this.log(msg)
-          }
-        })
-
-        // Connect
-        this.log('Connecting to device...')
-        await this.loader.main()
-
-        this.chipInfo = `${this.loader.chip.CHIP_NAME}`
-        this.connected = true
-        this.log(`Connected: ${this.chipInfo}`)
-
-      } catch (e) {
-        this.log(`Error: ${e.message}`)
-        this.notify('negative', e.message)
-      }
-      this.connecting = false
-    },
-
-    async disconnectDevice() {
-      try {
-        if (this.transport) {
-          await this.transport.disconnect()
+    // Simple API helper since we don't have LNbits.api
+    const api = {
+      async request(method, path, data = null) {
+        const options = {
+          method,
+          headers: { 'Content-Type': 'application/json' }
         }
-      } catch (e) {
-        console.error('Disconnect error:', e)
-      }
-      this.connected = false
-      this.port = null
-      this.transport = null
-      this.loader = null
-      this.chipInfo = ''
-      this.log('Disconnected')
-    },
-
-    onDeviceChange() {
-      this.selectedVersion = null
-    },
-
-    async createInvoice() {
-      this.creatingInvoice = true
-      try {
-        const response = await LNbits.api.request(
-          'POST',
-          `/tnaflasher/api/v1/flash/invoice?wallet_id=${WALLET_ID}`,
-          null,
-          {
-            device: this.selectedDevice,
-            version: this.selectedVersion
-          }
-        )
-
-        this.invoice = response.data.bolt11
-        this.paymentHash = response.data.payment_hash
-        this.expiresAt = response.data.expires_at
-
-        // Start countdown
-        this.updateExpiryCountdown()
-        this.expiryInterval = setInterval(() => this.updateExpiryCountdown(), 1000)
-
-        // Start checking payment status
-        this.startPaymentCheck()
-
-      } catch (e) {
-        this.notify('negative', e.response?.data?.detail || e.message || 'Failed to create invoice')
-      }
-      this.creatingInvoice = false
-    },
-
-    updateExpiryCountdown() {
-      if (!this.expiresAt) return
-      const now = Math.floor(Date.now() / 1000)
-      const remaining = this.expiresAt - now
-      if (remaining <= 0) {
-        this.expiryCountdown = 'Expired'
-        clearInterval(this.expiryInterval)
-        return
-      }
-      const minutes = Math.floor(remaining / 60)
-      const seconds = remaining % 60
-      this.expiryCountdown = `${minutes}:${seconds.toString().padStart(2, '0')}`
-    },
-
-    startPaymentCheck() {
-      this.checkingPayment = true
-      this.paymentCheckInterval = setInterval(async () => {
-        try {
-          const response = await LNbits.api.request(
-            'GET',
-            `/tnaflasher/api/v1/flash/status/${this.paymentHash}`
-          )
-
-          if (response.data.status === 'paid' || response.data.status === 'flashed') {
-            this.paid = true
-            this.flashToken = response.data.token
-            this.checkingPayment = false
-            clearInterval(this.paymentCheckInterval)
-            clearInterval(this.expiryInterval)
-            this.notify('positive', 'Payment received!')
-          }
-        } catch (e) {
-          console.error('Payment check error:', e)
+        if (data) {
+          options.body = JSON.stringify(data)
         }
-      }, 2000)
-    },
-
-    copyInvoice() {
-      navigator.clipboard.writeText(this.invoice)
-      this.notify('positive', 'Invoice copied!')
-    },
-
-    async startFlashing() {
-      if (!this.flashToken) {
-        this.notify('negative', 'No flash token available')
-        return
-      }
-
-      this.flashing = true
-      this.flashProgress = 0
-      this.flashStatus = 'Downloading firmware...'
-
-      try {
-        // Download firmware
-        const firmwareUrl = `/tnaflasher/api/v1/firmware/${this.selectedDevice}/${this.selectedVersion}?token=${this.flashToken}`
-        const response = await fetch(firmwareUrl)
-
+        const response = await fetch(API_BASE + path, options)
         if (!response.ok) {
-          throw new Error('Failed to download firmware')
+          const error = await response.json().catch(() => ({ detail: 'Request failed' }))
+          throw { response: { data: error }, message: error.detail || 'Request failed' }
         }
-
-        const firmwareData = await response.arrayBuffer()
-        this.log(`Firmware downloaded: ${firmwareData.byteLength} bytes`)
-
-        // Convert to Uint8Array
-        const firmware = new Uint8Array(firmwareData)
-
-        // Flash settings
-        // Factory partition starts at 0x0 for factory images
-        const flashOptions = {
-          fileArray: [{
-            data: firmware,
-            address: 0x0
-          }],
-          flashSize: 'keep',
-          flashMode: 'keep',
-          flashFreq: 'keep',
-          eraseAll: !this.keepConfig,
-          compress: true,
-          reportProgress: (fileIndex, written, total) => {
-            this.flashProgress = Math.round((written / total) * 100)
-            this.flashStatus = `Flashing: ${this.flashProgress}%`
-          }
-        }
-
-        this.flashStatus = 'Erasing flash...'
-        this.log('Starting flash...')
-
-        await this.loader.writeFlash(flashOptions)
-
-        this.flashStatus = 'Resetting device...'
-        await this.loader.hardReset()
-
-        // Mark flash as complete on server
-        try {
-          await LNbits.api.request(
-            'POST',
-            `/tnaflasher/api/v1/flash/complete/${this.paymentHash}`
-          )
-        } catch (e) {
-          console.error('Failed to mark complete:', e)
-        }
-
-        this.flashComplete = true
-        this.flashing = false
-        this.log('Flash complete!')
-        this.notify('positive', 'Device flashed successfully!')
-
-      } catch (e) {
-        this.log(`Flash error: ${e.message}`)
-        this.notify('negative', e.message)
-        this.flashing = false
+        return { data: await response.json() }
       }
-    },
-
-    resetAll() {
-      this.disconnectDevice()
-      this.selectedDevice = null
-      this.selectedVersion = null
-      this.keepConfig = true
-      this.invoice = null
-      this.paymentHash = null
-      this.paid = false
-      this.flashToken = null
-      this.flashing = false
-      this.flashProgress = 0
-      this.flashComplete = false
-      this.terminalOutput = []
-    }
-  },
-
-  async created() {
-    // Validate wallet_id first
-    if (!WALLET_ID || WALLET_ID === 'public' || WALLET_ID.length < 10) {
-      this.walletError = 'Invalid wallet ID. Please use the correct public URL from the admin dashboard.'
-      return
     }
 
-    // Try to load devices - this validates the extension is working
-    try {
-      await this.loadDevices()
-      await this.loadPrice()
-      this.walletValid = true
-    } catch (e) {
-      this.walletError = 'Failed to connect to the flasher service. Please try again later.'
-    }
-  },
+    const app = Vue.createApp({
+      delimiters: ['${', '}'],
 
-  beforeUnmount() {
-    if (this.paymentCheckInterval) clearInterval(this.paymentCheckInterval)
-    if (this.expiryInterval) clearInterval(this.expiryInterval)
-  }
-})
+      data() {
+        return {
+          // Wallet validation
+          walletValid: false,
+          walletError: '',
 
-window.app.mount('#vue')
-</script>
-{% endblock %}
+          // Browser check
+          isChromium: !!navigator.serial,
+          browserWarningDismissed: false,
+
+          // Connection
+          connected: false,
+          connecting: false,
+          port: null,
+          transport: null,
+          loader: null,
+          chipInfo: '',
+
+          // Device selection
+          devices: [],
+          selectedDevice: null,
+          selectedVersion: null,
+          keepConfig: true,
+
+          // Payment
+          priceSats: 5000,
+          invoice: null,
+          paymentHash: null,
+          expiresAt: null,
+          expiryCountdown: '',
+          checkingPayment: false,
+          creatingInvoice: false,
+          paid: false,
+          flashToken: null,
+
+          // Flashing
+          flashing: false,
+          flashProgress: 0,
+          flashStatus: '',
+          flashComplete: false,
+          terminalOutput: [],
+
+          // Notifications
+          notification: null
+        }
+      },
+
+      computed: {
+        deviceOptions() {
+          return this.devices.map(d => ({
+            label: d.name,
+            value: d.id
+          }))
+        },
+
+        versionOptions() {
+          const device = this.devices.find(d => d.id === this.selectedDevice)
+          if (!device) return []
+          return device.versions.map(v => ({
+            label: v,
+            value: v
+          }))
+        },
+
+        qrCodeUrl() {
+          if (!this.invoice) return ''
+          return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(this.invoice.toUpperCase())}`
+        }
+      },
+
+      methods: {
+        notify(type, message) {
+          const colorMap = { positive: 'positive', negative: 'negative', warning: 'warning', info: 'info' }
+          this.notification = { color: colorMap[type] || 'info', message }
+          setTimeout(() => { this.notification = null }, 3000)
+        },
+
+        formatSats(sats) {
+          return new Intl.NumberFormat().format(sats)
+        },
+
+        log(message) {
+          this.terminalOutput.push(message)
+          console.log(message)
+        },
+
+        async loadDevices() {
+          const response = await api.request('GET', '/tnaflasher/api/v1/devices')
+          this.devices = response.data.devices
+        },
+
+        async loadPrice() {
+          const response = await api.request('GET', '/tnaflasher/api/v1/price')
+          this.priceSats = response.data.price_sats
+        },
+
+        async connectDevice() {
+          this.connecting = true
+          try {
+            // Request serial port
+            this.port = await navigator.serial.requestPort()
+            this.log('Port selected')
+
+            // Create transport
+            this.transport = new window.Transport(this.port, true)
+
+            // Create loader
+            this.loader = new window.ESPLoader({
+              transport: this.transport,
+              baudrate: 115200,
+              romBaudrate: 115200,
+              terminal: {
+                clean: () => {},
+                writeLine: (msg) => this.log(msg),
+                write: (msg) => this.log(msg)
+              }
+            })
+
+            // Connect
+            this.log('Connecting to device...')
+            await this.loader.main()
+
+            this.chipInfo = `${this.loader.chip.CHIP_NAME}`
+            this.connected = true
+            this.log(`Connected: ${this.chipInfo}`)
+
+          } catch (e) {
+            this.log(`Error: ${e.message}`)
+            this.notify('negative', e.message)
+          }
+          this.connecting = false
+        },
+
+        async disconnectDevice() {
+          try {
+            if (this.transport) {
+              await this.transport.disconnect()
+            }
+          } catch (e) {
+            console.error('Disconnect error:', e)
+          }
+          this.connected = false
+          this.port = null
+          this.transport = null
+          this.loader = null
+          this.chipInfo = ''
+          this.log('Disconnected')
+        },
+
+        onDeviceChange() {
+          this.selectedVersion = null
+        },
+
+        async createInvoice() {
+          this.creatingInvoice = true
+          try {
+            const response = await api.request(
+              'POST',
+              `/tnaflasher/api/v1/flash/invoice?wallet_id=${WALLET_ID}`,
+              {
+                device: this.selectedDevice,
+                version: this.selectedVersion
+              }
+            )
+
+            this.invoice = response.data.bolt11
+            this.paymentHash = response.data.payment_hash
+            this.expiresAt = response.data.expires_at
+
+            // Start countdown
+            this.updateExpiryCountdown()
+            this.expiryInterval = setInterval(() => this.updateExpiryCountdown(), 1000)
+
+            // Start checking payment status
+            this.startPaymentCheck()
+
+          } catch (e) {
+            this.notify('negative', e.response?.data?.detail || e.message || 'Failed to create invoice')
+          }
+          this.creatingInvoice = false
+        },
+
+        updateExpiryCountdown() {
+          if (!this.expiresAt) return
+          const now = Math.floor(Date.now() / 1000)
+          const remaining = this.expiresAt - now
+          if (remaining <= 0) {
+            this.expiryCountdown = 'Expired'
+            clearInterval(this.expiryInterval)
+            return
+          }
+          const minutes = Math.floor(remaining / 60)
+          const seconds = remaining % 60
+          this.expiryCountdown = `${minutes}:${seconds.toString().padStart(2, '0')}`
+        },
+
+        startPaymentCheck() {
+          this.checkingPayment = true
+          this.paymentCheckInterval = setInterval(async () => {
+            try {
+              const response = await api.request(
+                'GET',
+                `/tnaflasher/api/v1/flash/status/${this.paymentHash}`
+              )
+
+              if (response.data.status === 'paid' || response.data.status === 'flashed') {
+                this.paid = true
+                this.flashToken = response.data.token
+                this.checkingPayment = false
+                clearInterval(this.paymentCheckInterval)
+                clearInterval(this.expiryInterval)
+                this.notify('positive', 'Payment received!')
+              }
+            } catch (e) {
+              console.error('Payment check error:', e)
+            }
+          }, 2000)
+        },
+
+        copyInvoice() {
+          navigator.clipboard.writeText(this.invoice)
+          this.notify('positive', 'Invoice copied!')
+        },
+
+        async startFlashing() {
+          if (!this.flashToken) {
+            this.notify('negative', 'No flash token available')
+            return
+          }
+
+          this.flashing = true
+          this.flashProgress = 0
+          this.flashStatus = 'Downloading firmware...'
+
+          try {
+            // Download firmware
+            const firmwareUrl = `/tnaflasher/api/v1/firmware/${this.selectedDevice}/${this.selectedVersion}?token=${this.flashToken}`
+            const response = await fetch(firmwareUrl)
+
+            if (!response.ok) {
+              throw new Error('Failed to download firmware')
+            }
+
+            const firmwareData = await response.arrayBuffer()
+            this.log(`Firmware downloaded: ${firmwareData.byteLength} bytes`)
+
+            // Convert to Uint8Array
+            const firmware = new Uint8Array(firmwareData)
+
+            // Flash settings
+            const flashOptions = {
+              fileArray: [{
+                data: firmware,
+                address: 0x0
+              }],
+              flashSize: 'keep',
+              flashMode: 'keep',
+              flashFreq: 'keep',
+              eraseAll: !this.keepConfig,
+              compress: true,
+              reportProgress: (fileIndex, written, total) => {
+                this.flashProgress = Math.round((written / total) * 100)
+                this.flashStatus = `Flashing: ${this.flashProgress}%`
+              }
+            }
+
+            this.flashStatus = 'Erasing flash...'
+            this.log('Starting flash...')
+
+            await this.loader.writeFlash(flashOptions)
+
+            this.flashStatus = 'Resetting device...'
+            await this.loader.hardReset()
+
+            // Mark flash as complete on server
+            try {
+              await api.request(
+                'POST',
+                `/tnaflasher/api/v1/flash/complete/${this.paymentHash}`
+              )
+            } catch (e) {
+              console.error('Failed to mark complete:', e)
+            }
+
+            this.flashComplete = true
+            this.flashing = false
+            this.log('Flash complete!')
+            this.notify('positive', 'Device flashed successfully!')
+
+          } catch (e) {
+            this.log(`Flash error: ${e.message}`)
+            this.notify('negative', e.message)
+            this.flashing = false
+          }
+        },
+
+        resetAll() {
+          this.disconnectDevice()
+          this.selectedDevice = null
+          this.selectedVersion = null
+          this.keepConfig = true
+          this.invoice = null
+          this.paymentHash = null
+          this.paid = false
+          this.flashToken = null
+          this.flashing = false
+          this.flashProgress = 0
+          this.flashComplete = false
+          this.terminalOutput = []
+        }
+      },
+
+      async created() {
+        // Validate wallet_id first
+        if (!WALLET_ID || WALLET_ID === 'public' || WALLET_ID.length < 10) {
+          this.walletError = 'Invalid wallet ID. Please use the correct public URL from the admin dashboard.'
+          return
+        }
+
+        // Try to load devices - this validates the extension is working
+        try {
+          await this.loadDevices()
+          await this.loadPrice()
+          this.walletValid = true
+        } catch (e) {
+          this.walletError = 'Failed to connect to the flasher service. Please try again later.'
+        }
+      },
+
+      beforeUnmount() {
+        if (this.paymentCheckInterval) clearInterval(this.paymentCheckInterval)
+        if (this.expiryInterval) clearInterval(this.expiryInterval)
+      }
+    })
+
+    app.use(Quasar)
+    app.mount('#vue')
+  </script>
+</body>
+</html>
