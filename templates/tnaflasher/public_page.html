@@ -530,8 +530,15 @@
             const firmwareData = await response.arrayBuffer()
             this.log(`Firmware downloaded: ${firmwareData.byteLength} bytes`)
 
-            // Convert to Uint8Array
-            const firmware = new Uint8Array(firmwareData)
+            // Convert ArrayBuffer to binary string (esptool-js expects string, not Uint8Array)
+            const bytes = new Uint8Array(firmwareData)
+            let firmware = ''
+            // Process in chunks to avoid call stack issues with large files
+            const chunkSize = 8192
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+              const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
+              firmware += String.fromCharCode.apply(null, chunk)
+            }
 
             // Flash settings
             const flashOptions = {
