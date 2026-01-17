@@ -67,3 +67,21 @@ class Setting(BaseModel):
     key: str
     value: str
     updated_at: Optional[int] = None
+
+
+class Bulletin(BaseModel):
+    """News/update bulletin for the public page"""
+    id: str
+    message: str
+    active: bool = True
+    created_at: Optional[int] = None
+
+
+class CreateBulletin(BaseModel):
+    """Data needed to create a bulletin"""
+    message: str
+
+
+class BulletinsResponse(BaseModel):
+    """List of bulletins"""
+    bulletins: list[Bulletin]

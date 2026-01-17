@@ -11,6 +11,8 @@ from .models import (
     DevicesResponse,
     PriceResponse,
     StatsResponse,
+    CreateBulletin,
+    BulletinsResponse,
 )
 from .crud import (
     get_all_flash_requests,
@@ -21,6 +23,10 @@ from .crud import (
     set_wallet_id,
     mark_token_used,
     mark_flash_complete,
+    create_bulletin,
+    get_bulletins,
+    update_bulletin,
+    delete_bulletin,
 )
 from .services import (
     get_available_devices,
@@ -234,3 +240,53 @@ async def api_admin_delete_firmware(
     firmware_path.unlink()
 
     return {"success": True, "device": device, "version": version}
+
+
+# ============== Bulletin Endpoints ==============
+
+@tnaflasher_api_router.get("/bulletins")
+async def api_get_bulletins() -> BulletinsResponse:
+    """Get active bulletins for public display"""
+    bulletins = await get_bulletins(active_only=True)
+    return BulletinsResponse(bulletins=bulletins)
+
+
+@tnaflasher_api_router.get("/admin/bulletins")
+async def api_admin_get_bulletins(user: User = Depends(check_admin)) -> BulletinsResponse:
+    """Get all bulletins including inactive (admin only)"""
+    bulletins = await get_bulletins(active_only=False)
+    return BulletinsResponse(bulletins=bulletins)
+
+
+@tnaflasher_api_router.post("/admin/bulletins")
+async def api_admin_create_bulletin(
+    data: CreateBulletin,
+    user: User = Depends(check_admin)
+):
+    """Create a new bulletin (admin only)"""
+    bulletin = await create_bulletin(data.message)
+    return bulletin.dict()
+
+
+@tnaflasher_api_router.put("/admin/bulletins/{bulletin_id}")
+async def api_admin_update_bulletin(
+    bulletin_id: str,
+    message: str = Query(None),
+    active: bool = Query(None),
+    user: User = Depends(check_admin)
+):
+    """Update a bulletin (admin only)"""
+    bulletin = await update_bulletin(bulletin_id, message=message, active=active)
+    if not bulletin:
+        raise HTTPException(status_code=404, detail="Bulletin not found")
+    return bulletin.dict()
+
+
+@tnaflasher_api_router.delete("/admin/bulletins/{bulletin_id}")
+async def api_admin_delete_bulletin(
+    bulletin_id: str,
+    user: User = Depends(check_admin)
+):
+    """Delete a bulletin (admin only)"""
+    await delete_bulletin(bulletin_id)
+    return {"success": True}

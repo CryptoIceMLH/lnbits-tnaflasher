@@ -7,19 +7,186 @@
   <link href="https://fonts.googleapis.com/css?family=Material+Icons" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.prod.css" rel="stylesheet">
   <style>
-    body {
-      background-color: #1d1d1d;
-      min-height: 100vh;
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #1a1a1a;
+      --bg-card: #222222;
+      --accent: #f7931a;
+      --accent-dark: #d77b00;
+      --border: #333333;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --text-muted: #888888;
+      --online: #00ff00;
+      --offline: #ff3333;
     }
+
+    body {
+      background-color: var(--bg-primary);
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
     .fixed-bottom {
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
     }
+
     /* Hide Vue template until mounted */
     [v-cloak] {
       display: none !important;
+    }
+
+    /* Override Quasar card styles */
+    .q-card {
+      background-color: var(--bg-card) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 12px !important;
+    }
+
+    .q-card--dark {
+      background-color: var(--bg-card) !important;
+    }
+
+    /* Card hover effect */
+    .tna-card {
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tna-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+    }
+
+    .tna-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent) !important;
+      box-shadow: 0 8px 25px rgba(247, 147, 26, 0.15);
+    }
+
+    /* Text colors */
+    .text-tna-primary { color: var(--text-primary) !important; }
+    .text-tna-secondary { color: var(--text-secondary) !important; }
+    .text-tna-muted { color: var(--text-muted) !important; }
+    .text-tna-accent { color: var(--accent) !important; }
+
+    /* Background colors */
+    .bg-tna-primary { background-color: var(--bg-primary) !important; }
+    .bg-tna-secondary { background-color: var(--bg-secondary) !important; }
+    .bg-tna-card { background-color: var(--bg-card) !important; }
+
+    /* Override Quasar badge to use orange */
+    .q-badge--primary {
+      background-color: var(--accent) !important;
+    }
+
+    /* Override Quasar buttons */
+    .q-btn--primary, .q-btn.bg-primary {
+      background-color: var(--accent) !important;
+    }
+
+    .q-btn--primary:hover, .q-btn.bg-primary:hover {
+      background-color: var(--accent-dark) !important;
+    }
+
+    /* Header gradient text */
+    .tna-header {
+      background: linear-gradient(135deg, var(--accent), #ffd700);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 700;
+    }
+
+    /* Disabled card state */
+    .tna-card-disabled {
+      opacity: 0.6;
+      background-color: var(--bg-secondary) !important;
+    }
+
+    .tna-card-disabled::before {
+      background: var(--border);
+    }
+
+    /* QR code container */
+    .qr-container {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+
+    /* Progress bar */
+    .q-linear-progress {
+      background-color: var(--border) !important;
+    }
+
+    /* Input fields */
+    .q-field--outlined .q-field__control {
+      border-color: var(--border) !important;
+    }
+
+    .q-field--outlined:hover .q-field__control {
+      border-color: var(--accent) !important;
+    }
+
+    .q-field--focused .q-field__control {
+      border-color: var(--accent) !important;
+    }
+
+    /* Checkbox */
+    .q-checkbox__inner--truthy {
+      color: var(--accent) !important;
+    }
+
+    /* Select dropdown */
+    .q-menu {
+      background-color: var(--bg-card) !important;
+      border: 1px solid var(--border);
+    }
+
+    /* Bulletin board styles */
+    .bulletin-board {
+      background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+      border-left: 4px solid var(--accent);
+    }
+
+    .bulletin-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .bulletin-item:last-child {
+      border-bottom: none;
+    }
+
+    .bulletin-date {
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    /* Connected status glow */
+    .status-connected {
+      color: var(--online);
+      text-shadow: 0 0 10px var(--online);
+    }
+
+    /* Terminal styling */
+    .terminal-output {
+      background-color: #000 !important;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
     }
   </style>
 </head>
@@ -30,9 +197,23 @@
 
         <!-- Header -->
         <div class="text-center q-mb-lg">
-          <h3 class="q-mb-sm text-white">Tech Nerd Army Web Flasher</h3>
-          <p class="text-subtitle1 text-grey">Pay with Lightning, flash your miner</p>
+          <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
+          <p class="text-subtitle1 text-tna-secondary">Pay with Lightning ⚡ Flash your miner</p>
         </div>
+
+        <!-- News/Bulletin Board -->
+        <q-card v-if="bulletins.length > 0" class="q-mb-md tna-card bulletin-board">
+          <q-card-section>
+            <div class="row items-center q-mb-sm">
+              <q-icon name="campaign" color="orange" size="sm" class="q-mr-sm" />
+              <span class="text-h6 text-tna-primary">News & Updates</span>
+            </div>
+            <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item">
+              <div class="bulletin-date">${ formatBulletinDate(bulletin.created_at) }</div>
+              <div class="text-tna-secondary">${ bulletin.message }</div>
+            </div>
+          </q-card-section>
+        </q-card>
 
         <!-- Wallet Error -->
         <q-banner v-if="walletError" class="bg-negative text-white q-mb-md" rounded>
@@ -43,24 +224,24 @@
         </q-banner>
 
         <!-- Browser Check -->
-        <q-banner v-if="walletValid && !isChromium && !browserWarningDismissed" class="bg-amber-8 text-white q-mb-md" rounded>
+        <q-banner v-if="walletValid && !isChromium && !browserWarningDismissed" class="bg-tna-secondary text-tna-accent q-mb-md" rounded style="border: 1px solid var(--accent);">
           <template v-slot:avatar>
-            <q-icon name="info" />
+            <q-icon name="info" color="orange" />
           </template>
           <div class="row items-center">
-            <div class="col">
+            <div class="col text-tna-secondary">
               Web Serial API requires Chrome, Edge, Brave, or Opera browser.
             </div>
-            <q-btn flat dense icon="close" @click="browserWarningDismissed = true" class="q-ml-sm" />
+            <q-btn flat dense icon="close" @click="browserWarningDismissed = true" class="q-ml-sm text-tna-accent" />
           </div>
         </q-banner>
 
         <!-- Step 1: Connect Device -->
-        <q-card v-if="walletValid" class="q-mb-md">
+        <q-card v-if="walletValid" class="q-mb-md tna-card">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge color="primary" class="q-mr-sm">1</q-badge>
-              <span class="text-h6">Connect Device</span>
+              <span class="text-h6 text-tna-primary">Connect Device</span>
             </div>
 
             <div v-if="!connected">
@@ -75,8 +256,8 @@
             </div>
 
             <div v-else class="row items-center">
-              <q-icon name="check_circle" color="positive" size="sm" class="q-mr-sm" />
-              <span class="text-positive">Connected: ${ chipInfo }</span>
+              <q-icon name="check_circle" size="sm" class="q-mr-sm status-connected" />
+              <span class="status-connected">Connected: ${ chipInfo }</span>
               <q-space />
               <q-btn flat dense color="negative" label="Disconnect" @click="disconnectDevice" />
             </div>
@@ -84,11 +265,11 @@
         </q-card>
 
         <!-- Step 2: Select Device & Firmware -->
-        <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !connected }">
+        <q-card v-if="walletValid" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !connected }">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="connected ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
-              <span class="text-h6">Select Firmware</span>
+              <span class="text-h6 text-tna-primary">Select Firmware</span>
             </div>
 
             <div class="row q-col-gutter-md">
@@ -99,6 +280,7 @@
                   label="Device"
                   outlined
                   dense
+                  dark
                   emit-value
                   map-options
                   :disable="!connected || paid"
@@ -112,6 +294,7 @@
                   label="Version"
                   outlined
                   dense
+                  dark
                   emit-value
                   map-options
                   :disable="!connected || !selectedDevice || paid"
@@ -122,6 +305,8 @@
                   v-model="keepConfig"
                   label="Keep existing configuration (WiFi, pool settings, etc.)"
                   :disable="!connected || paid"
+                  dark
+                  class="text-tna-secondary"
                 />
               </div>
             </div>
@@ -129,35 +314,36 @@
         </q-card>
 
         <!-- Step 3: Pay -->
-        <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !selectedVersion }">
+        <q-card v-if="walletValid" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !selectedVersion }">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="selectedVersion ? 'primary' : 'grey'" class="q-mr-sm">3</q-badge>
-              <span class="text-h6">Pay to Unlock</span>
+              <span class="text-h6 text-tna-primary">Pay to Unlock</span>
             </div>
 
             <!-- Not yet paid -->
             <div v-if="!paid">
               <div class="text-center q-mb-md">
-                <div class="text-h5 text-weight-bold">${ formatSats(priceSats) } SATS</div>
+                <div class="text-h4 text-weight-bold text-tna-accent">${ formatSats(priceSats) } SATS</div>
               </div>
 
               <!-- No invoice yet -->
               <div v-if="!invoice" class="text-center">
                 <q-btn
-                  color="warning"
+                  color="primary"
                   icon="flash_on"
                   label="Generate Invoice"
                   @click="createInvoice"
                   :loading="creatingInvoice"
                   :disable="!selectedVersion"
+                  size="lg"
                 />
               </div>
 
               <!-- Invoice created, waiting for payment -->
               <div v-else class="text-center">
-                <div class="q-mb-md">
-                  <img :src="qrCodeUrl" alt="QR Code" style="max-width: 250px; width: 100%;" />
+                <div class="q-mb-md qr-container">
+                  <img :src="qrCodeUrl" alt="QR Code" style="max-width: 230px; width: 100%;" />
                 </div>
 
                 <q-input
@@ -165,44 +351,45 @@
                   label="Lightning Invoice"
                   outlined
                   dense
+                  dark
                   readonly
                   class="q-mb-sm"
                 >
                   <template v-slot:append>
-                    <q-btn flat dense icon="content_copy" @click="copyInvoice">
+                    <q-btn flat dense icon="content_copy" @click="copyInvoice" class="text-tna-accent">
                       <q-tooltip>Copy</q-tooltip>
                     </q-btn>
                   </template>
                 </q-input>
 
-                <div class="text-caption text-grey q-mb-md">
-                  Expires in: ${ expiryCountdown }
+                <div class="text-caption text-tna-muted q-mb-md">
+                  Expires in: <span class="text-tna-accent">${ expiryCountdown }</span>
                 </div>
 
-                <q-spinner-dots v-if="checkingPayment" color="primary" size="2em" />
-                <div v-if="checkingPayment" class="text-caption">Waiting for payment...</div>
+                <q-spinner-dots v-if="checkingPayment" color="orange" size="2em" />
+                <div v-if="checkingPayment" class="text-caption text-tna-secondary">Waiting for payment...</div>
               </div>
             </div>
 
             <!-- Paid! -->
             <div v-else class="text-center">
-              <q-icon name="check_circle" color="positive" size="xl" />
-              <div class="text-h6 text-positive q-mt-sm">Payment Confirmed!</div>
+              <q-icon name="check_circle" size="xl" class="status-connected" />
+              <div class="text-h6 status-connected q-mt-sm">Payment Confirmed!</div>
             </div>
           </q-card-section>
         </q-card>
 
         <!-- Step 4: Flash -->
-        <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !paid }">
+        <q-card v-if="walletValid" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
-              <span class="text-h6">Flash Device</span>
+              <span class="text-h6 text-tna-primary">Flash Device</span>
             </div>
 
             <div v-if="!flashing && !flashComplete" class="text-center">
               <q-btn
-                color="positive"
+                color="primary"
                 icon="flash_on"
                 label="Start Flashing"
                 @click="startFlashing"
@@ -216,35 +403,43 @@
               <q-linear-progress
                 :value="flashProgress / 100"
                 size="25px"
-                color="primary"
+                color="orange"
                 class="q-mb-md"
               >
                 <div class="absolute-full flex flex-center">
-                  <q-badge color="white" text-color="primary" :label="flashProgress + '%'" />
+                  <q-badge color="dark" text-color="orange" :label="flashProgress + '%'" />
                 </div>
               </q-linear-progress>
-              <div class="text-center text-caption">${ flashStatus }</div>
+              <div class="text-center text-caption text-tna-secondary">${ flashStatus }</div>
             </div>
 
             <!-- Flash complete -->
             <div v-if="flashComplete" class="text-center">
-              <q-icon name="check_circle" color="positive" size="xl" />
-              <div class="text-h6 text-positive q-mt-sm">Flash Complete!</div>
-              <p class="text-grey q-mt-sm">Your device has been flashed successfully.</p>
-              <q-btn flat color="primary" label="Flash Another Device" @click="resetAll" class="q-mt-md" />
+              <q-icon name="check_circle" size="xl" class="status-connected" />
+              <div class="text-h6 status-connected q-mt-sm">Flash Complete!</div>
+              <p class="text-tna-muted q-mt-sm">Your device has been flashed successfully.</p>
+              <q-btn flat label="Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
             </div>
           </q-card-section>
         </q-card>
 
         <!-- Terminal Output -->
-        <q-card v-if="walletValid && terminalOutput.length > 0">
+        <q-card v-if="walletValid && terminalOutput.length > 0" class="tna-card">
           <q-card-section>
-            <div class="text-h6 q-mb-md">Console Output</div>
-            <div class="bg-dark text-white q-pa-sm" style="font-family: monospace; max-height: 200px; overflow-y: auto;">
+            <div class="text-h6 q-mb-md text-tna-primary">Console Output</div>
+            <div class="terminal-output text-tna-accent q-pa-sm" style="max-height: 200px; overflow-y: auto;">
               <div v-for="(line, i) in terminalOutput" :key="i">${ line }</div>
             </div>
           </q-card-section>
         </q-card>
+
+        <!-- Footer -->
+        <div class="text-center q-mt-lg q-mb-md">
+          <p class="text-tna-muted text-caption">
+            Powered by <span class="text-tna-accent">Tech Nerd Army</span> ⚡
+            <a href="https://www.molonlabe.holdings/" target="_blank" class="text-tna-accent" style="text-decoration: none;">molonlabe.holdings</a>
+          </p>
+        </div>
 
         <!-- Toast Notification -->
         <q-banner v-if="notification" :class="'bg-' + notification.color + ' text-white fixed-bottom q-ma-md'" rounded style="z-index: 9999;">
@@ -297,6 +492,9 @@
           // Browser check
           isChromium: !!navigator.serial,
           browserWarningDismissed: false,
+
+          // News/Bulletins
+          bulletins: [],
 
           // Connection
           connected: false,
@@ -382,6 +580,21 @@
         async loadPrice() {
           const response = await api.request('GET', '/tnaflasher/api/v1/price')
           this.priceSats = response.data.price_sats
+        },
+
+        async loadBulletins() {
+          try {
+            const response = await api.request('GET', '/tnaflasher/api/v1/bulletins')
+            this.bulletins = response.data.bulletins || []
+          } catch (e) {
+            console.error('Failed to load bulletins:', e)
+          }
+        },
+
+        formatBulletinDate(timestamp) {
+          if (!timestamp) return ''
+          const date = new Date(timestamp * 1000)
+          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         },
 
         async connectDevice() {
@@ -618,6 +831,7 @@
         try {
           await this.loadDevices()
           await this.loadPrice()
+          await this.loadBulletins()
           this.walletValid = true
         } catch (e) {
           this.walletError = 'Failed to connect to the flasher service. Please try again later.'

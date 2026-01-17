@@ -42,3 +42,17 @@ async def m002_create_settings(db):
         INSERT INTO tnaflasher.settings (key, value) VALUES ('wallet_id', '')
         """
     )
+
+
+async def m003_create_bulletins(db):
+    """Create the bulletins table for news/updates on the public page"""
+    await db.execute(
+        """
+        CREATE TABLE tnaflasher.bulletins (
+            id TEXT PRIMARY KEY,
+            message TEXT NOT NULL,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )

@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import uuid4
 
 from . import db
-from .models import FlashRequest
+from .models import FlashRequest, Bulletin
 
 
 # ============== Flash Requests ==============
@@ -223,3 +223,95 @@ async def get_wallet_id() -> Optional[str]:
 async def set_wallet_id(wallet_id: str) -> None:
     """Set the wallet ID"""
     await set_setting("wallet_id", wallet_id)
+
+
+# ============== Bulletins ==============
+
+async def create_bulletin(message: str) -> Bulletin:
+    """Create a new bulletin"""
+    bulletin_id = str(uuid4())
+    now = int(time.time())
+
+    await db.execute(
+        """
+        INSERT INTO tnaflasher.bulletins (id, message, active, created_at)
+        VALUES (:id, :message, TRUE, :created_at)
+        """,
+        {"id": bulletin_id, "message": message, "created_at": now}
+    )
+
+    return Bulletin(
+        id=bulletin_id,
+        message=message,
+        active=True,
+        created_at=now
+    )
+
+
+async def get_bulletins(active_only: bool = True) -> list[Bulletin]:
+    """Get all bulletins, optionally only active ones"""
+    if active_only:
+        rows = await db.fetchall(
+            """
+            SELECT * FROM tnaflasher.bulletins
+            WHERE active = TRUE
+            ORDER BY created_at DESC
+            LIMIT 10
+            """
+        )
+    else:
+        rows = await db.fetchall(
+            """
+            SELECT * FROM tnaflasher.bulletins
+            ORDER BY created_at DESC
+            LIMIT 50
+            """
+        )
+
+    return [Bulletin(**row) for row in rows]
+
+
+async def update_bulletin(bulletin_id: str, message: str = None, active: bool = None) -> Optional[Bulletin]:
+    """Update a bulletin"""
+    updates = []
+    params = {"id": bulletin_id}
+
+    if message is not None:
+        updates.append("message = :message")
+        params["message"] = message
+
+    if active is not None:
+        updates.append("active = :active")
+        params["active"] = active
+
+    if not updates:
+        return None
+
+    await db.execute(
+        f"""
+        UPDATE tnaflasher.bulletins
+        SET {', '.join(updates)}
+        WHERE id = :id
+        """,
+        params
+    )
+
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.bulletins WHERE id = :id
+        """,
+        {"id": bulletin_id}
+    )
+
+    return Bulletin(**row) if row else None
+
+
+async def delete_bulletin(bulletin_id: str) -> bool:
+    """Delete a bulletin"""
+    await db.execute(
+        """
+        DELETE FROM tnaflasher.bulletins WHERE id = :id
+        """,
+        {"id": bulletin_id}
+    )
+    return True
