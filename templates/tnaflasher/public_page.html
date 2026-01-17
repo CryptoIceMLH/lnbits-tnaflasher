@@ -10,8 +10,16 @@
       <p class="text-subtitle1 text-grey">Pay with Lightning, flash your miner</p>
     </div>
 
+    <!-- Wallet Error -->
+    <q-banner v-if="walletError" class="bg-negative text-white q-mb-md" rounded>
+      <template v-slot:avatar>
+        <q-icon name="error" />
+      </template>
+      ${ walletError }
+    </q-banner>
+
     <!-- Browser Check -->
-    <q-banner v-if="!isChromium && !browserWarningDismissed" class="bg-amber-8 text-white q-mb-md" rounded>
+    <q-banner v-if="walletValid && !isChromium && !browserWarningDismissed" class="bg-amber-8 text-white q-mb-md" rounded>
       <template v-slot:avatar>
         <q-icon name="info" />
       </template>
@@ -24,7 +32,7 @@
     </q-banner>
 
     <!-- Step 1: Connect Device -->
-    <q-card class="q-mb-md">
+    <q-card v-if="walletValid" class="q-mb-md">
       <q-card-section>
         <div class="row items-center q-mb-md">
           <q-badge color="primary" class="q-mr-sm">1</q-badge>
@@ -52,7 +60,7 @@
     </q-card>
 
     <!-- Step 2: Select Device & Firmware -->
-    <q-card class="q-mb-md" :class="{ 'bg-grey-3': !connected }">
+    <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !connected }">
       <q-card-section>
         <div class="row items-center q-mb-md">
           <q-badge :color="connected ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
@@ -97,7 +105,7 @@
     </q-card>
 
     <!-- Step 3: Pay -->
-    <q-card class="q-mb-md" :class="{ 'bg-grey-3': !selectedVersion }">
+    <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !selectedVersion }">
       <q-card-section>
         <div class="row items-center q-mb-md">
           <q-badge :color="selectedVersion ? 'primary' : 'grey'" class="q-mr-sm">3</q-badge>
@@ -161,7 +169,7 @@
     </q-card>
 
     <!-- Step 4: Flash -->
-    <q-card class="q-mb-md" :class="{ 'bg-grey-3': !paid }">
+    <q-card v-if="walletValid" class="q-mb-md" :class="{ 'bg-grey-3': !paid }">
       <q-card-section>
         <div class="row items-center q-mb-md">
           <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
@@ -205,7 +213,7 @@
     </q-card>
 
     <!-- Terminal Output -->
-    <q-card v-if="terminalOutput.length > 0">
+    <q-card v-if="walletValid && terminalOutput.length > 0">
       <q-card-section>
         <div class="text-h6 q-mb-md">Console Output</div>
         <div class="bg-dark text-white q-pa-sm" style="font-family: monospace; max-height: 200px; overflow-y: auto;">
@@ -213,6 +221,11 @@
         </div>
       </q-card-section>
     </q-card>
+
+    <!-- Toast Notification -->
+    <q-banner v-if="notification" :class="'bg-' + notification.color + ' text-white fixed-bottom q-ma-md'" rounded style="z-index: 9999;">
+      ${ notification.message }
+    </q-banner>
 
   </div>
 </div>
@@ -230,11 +243,14 @@ const WALLET_ID = '{{ wallet_id }}'
 
 window.app = Vue.createApp({
   el: '#vue',
-  mixins: [windowMixin],
   delimiters: ['${', '}'],
 
   data() {
     return {
+      // Wallet validation
+      walletValid: false,
+      walletError: '',
+
       // Browser check
       isChromium: !!navigator.serial,
       browserWarningDismissed: false,
@@ -269,7 +285,10 @@ window.app = Vue.createApp({
       flashProgress: 0,
       flashStatus: '',
       flashComplete: false,
-      terminalOutput: []
+      terminalOutput: [],
+
+      // Notifications
+      notification: null
     }
   },
 
@@ -297,6 +316,12 @@ window.app = Vue.createApp({
   },
 
   methods: {
+    notify(type, message) {
+      const colorMap = { positive: 'positive', negative: 'negative', warning: 'warning', info: 'info' }
+      this.notification = { color: colorMap[type] || 'info', message }
+      setTimeout(() => { this.notification = null }, 3000)
+    },
+
     formatSats(sats) {
       return new Intl.NumberFormat().format(sats)
     },
@@ -356,7 +381,7 @@ window.app = Vue.createApp({
 
       } catch (e) {
         this.log(`Error: ${e.message}`)
-        this.$q.notify({ type: 'negative', message: e.message })
+        this.notify('negative', e.message)
       }
       this.connecting = false
     },
@@ -406,7 +431,7 @@ window.app = Vue.createApp({
         this.startPaymentCheck()
 
       } catch (e) {
-        LNbits.utils.notifyApiError(e)
+        this.notify('negative', e.response?.data?.detail || e.message || 'Failed to create invoice')
       }
       this.creatingInvoice = false
     },
@@ -440,7 +465,7 @@ window.app = Vue.createApp({
             this.checkingPayment = false
             clearInterval(this.paymentCheckInterval)
             clearInterval(this.expiryInterval)
-            this.$q.notify({ type: 'positive', message: 'Payment received!' })
+            this.notify('positive', 'Payment received!')
           }
         } catch (e) {
           console.error('Payment check error:', e)
@@ -450,12 +475,12 @@ window.app = Vue.createApp({
 
     copyInvoice() {
       navigator.clipboard.writeText(this.invoice)
-      this.$q.notify({ type: 'positive', message: 'Invoice copied!' })
+      this.notify('positive', 'Invoice copied!')
     },
 
     async startFlashing() {
       if (!this.flashToken) {
-        this.$q.notify({ type: 'negative', message: 'No flash token available' })
+        this.notify('negative', 'No flash token available')
         return
       }
 
@@ -517,11 +542,11 @@ window.app = Vue.createApp({
         this.flashComplete = true
         this.flashing = false
         this.log('Flash complete!')
-        this.$q.notify({ type: 'positive', message: 'Device flashed successfully!' })
+        this.notify('positive', 'Device flashed successfully!')
 
       } catch (e) {
         this.log(`Flash error: ${e.message}`)
-        this.$q.notify({ type: 'negative', message: e.message })
+        this.notify('negative', e.message)
         this.flashing = false
       }
     },
@@ -543,8 +568,20 @@ window.app = Vue.createApp({
   },
 
   async created() {
-    await this.loadDevices()
-    await this.loadPrice()
+    // Validate wallet_id first
+    if (!WALLET_ID || WALLET_ID === 'public' || WALLET_ID.length < 10) {
+      this.walletError = 'Invalid wallet ID. Please use the correct public URL from the admin dashboard.'
+      return
+    }
+
+    // Try to load devices - this validates the extension is working
+    try {
+      await this.loadDevices()
+      await this.loadPrice()
+      this.walletValid = true
+    } catch (e) {
+      this.walletError = 'Failed to connect to the flasher service. Please try again later.'
+    }
   },
 
   beforeUnmount() {

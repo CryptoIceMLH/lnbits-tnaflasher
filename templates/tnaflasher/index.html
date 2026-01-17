@@ -385,13 +385,30 @@
         this.loadingRequests = false
       },
 
-      copyPublicUrl() {
+      async copyPublicUrl() {
         if (!this.selectedWallet) {
           this.$q.notify({ type: 'warning', message: 'Select a wallet first' })
           return
         }
-        navigator.clipboard.writeText(this.publicUrl)
-        this.$q.notify({ type: 'positive', message: 'URL copied!' })
+        try {
+          await navigator.clipboard.writeText(this.publicUrl)
+          this.$q.notify({ type: 'positive', message: 'URL copied!' })
+        } catch (e) {
+          // Fallback for older browsers or non-HTTPS
+          const textArea = document.createElement('textarea')
+          textArea.value = this.publicUrl
+          textArea.style.position = 'fixed'
+          textArea.style.left = '-999999px'
+          document.body.appendChild(textArea)
+          textArea.select()
+          try {
+            document.execCommand('copy')
+            this.$q.notify({ type: 'positive', message: 'URL copied!' })
+          } catch (err) {
+            this.$q.notify({ type: 'negative', message: 'Failed to copy URL' })
+          }
+          document.body.removeChild(textArea)
+        }
       },
 
       async uploadFirmware(deviceId) {
