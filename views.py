@@ -12,7 +12,7 @@ tnaflasher_generic_router = APIRouter()
 async def index(req: Request, user: User = Depends(check_user_exists)):
     """Admin dashboard page - requires LNbits login"""
     return tnaflasher_renderer().TemplateResponse(
-        "tnaflasher/index.html",
+        "index.html",
         {"request": req, "user": user.json()}
     )
 
@@ -21,6 +21,6 @@ async def index(req: Request, user: User = Depends(check_user_exists)):
 async def public_page(req: Request, wallet_id: str):
     """Public flasher page - no authentication required"""
     return tnaflasher_renderer().TemplateResponse(
-        "tnaflasher/public_page.html",
+        "public_page.html",
         {"request": req, "wallet_id": wallet_id}
     )
