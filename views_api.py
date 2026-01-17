@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Query, Depends, HTTPException
+from fastapi import APIRouter, Query, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from lnbits.core.models import User
 from lnbits.decorators import check_admin
+from pathlib import Path
 
 from .models import (
     CreateFlashRequest,
@@ -26,7 +27,9 @@ from .services import (
     create_flash_invoice,
     get_flash_status,
     get_firmware_path,
+    get_firmware_dir,
     verify_flash_token,
+    SUPPORTED_DEVICES,
 )
 
 tnaflasher_api_router = APIRouter(prefix="/api/v1")
@@ -175,3 +178,59 @@ async def api_admin_set_wallet(
     """Set the wallet ID (admin only)"""
     await set_wallet_id(wallet_id)
     return {"success": True, "wallet_id": wallet_id}
+
+
+@tnaflasher_api_router.post("/admin/firmware/upload")
+async def api_admin_upload_firmware(
+    device: str = Query(...),
+    version: str = Query(...),
+    file: UploadFile = File(...),
+    user: User = Depends(check_admin)
+):
+    """Upload a firmware file (admin only)"""
+    # Validate device
+    if device not in SUPPORTED_DEVICES:
+        raise HTTPException(status_code=400, detail=f"Unknown device: {device}")
+
+    # Validate file extension
+    if not file.filename.endswith(".bin"):
+        raise HTTPException(status_code=400, detail="File must be a .bin file")
+
+    # Create device directory if needed
+    firmware_dir = get_firmware_dir()
+    device_dir = firmware_dir / device
+    device_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save the file
+    file_path = device_dir / f"{version}.bin"
+    content = await file.read()
+    file_path.write_bytes(content)
+
+    return {
+        "success": True,
+        "device": device,
+        "version": version,
+        "size": len(content)
+    }
+
+
+@tnaflasher_api_router.delete("/admin/firmware/{device}/{version}")
+async def api_admin_delete_firmware(
+    device: str,
+    version: str,
+    user: User = Depends(check_admin)
+):
+    """Delete a firmware file (admin only)"""
+    # Validate device
+    if device not in SUPPORTED_DEVICES:
+        raise HTTPException(status_code=400, detail=f"Unknown device: {device}")
+
+    # Get firmware path
+    firmware_path = get_firmware_path(device, version)
+    if not firmware_path:
+        raise HTTPException(status_code=404, detail="Firmware not found")
+
+    # Delete the file
+    firmware_path.unlink()
+
+    return {"success": True, "device": device, "version": version}

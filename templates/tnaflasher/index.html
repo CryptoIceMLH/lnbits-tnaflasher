@@ -101,27 +101,80 @@
     </q-card>
   </div>
 
-  <!-- Available Firmware -->
+  <!-- Firmware Management -->
   <div class="col-12 col-md-6">
     <q-card>
       <q-card-section>
-        <div class="text-h6 q-mb-md">Available Firmware</div>
+        <div class="row items-center q-mb-md">
+          <div class="text-h6">Firmware Management</div>
+          <q-space></q-space>
+          <q-btn flat icon="refresh" @click="loadDevices" :loading="loadingDevices">
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
+        </div>
 
         <q-list bordered separator>
-          <q-item v-for="device in devices" :key="device.id">
-            <q-item-section>
-              <q-item-label>${ device.name }</q-item-label>
-              <q-item-label caption>
-                ${ device.versions.length > 0 ? device.versions.join(', ') : 'No firmware uploaded' }
-              </q-item-label>
-            </q-item-section>
-          </q-item>
-        </q-list>
+          <q-expansion-item v-for="device in devices" :key="device.id" :label="device.name" header-class="text-weight-medium">
+            <q-card>
+              <q-card-section>
+                <!-- Existing versions -->
+                <div v-if="device.versions.length > 0" class="q-mb-md">
+                  <div class="text-caption text-grey q-mb-sm">Installed versions:</div>
+                  <q-chip
+                    v-for="version in device.versions"
+                    :key="version"
+                    removable
+                    @remove="deleteFirmware(device.id, version)"
+                    color="primary"
+                    text-color="white"
+                    size="sm"
+                  >
+                    ${ version }
+                  </q-chip>
+                </div>
+                <div v-else class="text-grey q-mb-md">No firmware uploaded</div>
 
-        <div class="q-mt-md text-caption text-grey">
-          To add firmware, place .bin files in: <br>
-          <code>tnaflasher/static/firmware/{DeviceID}/{version}.bin</code>
-        </div>
+                <!-- Upload new version -->
+                <div class="row q-col-gutter-sm items-center">
+                  <div class="col-auto">
+                    <q-input
+                      v-model="uploadVersion[device.id]"
+                      label="Version"
+                      placeholder="v3.42"
+                      outlined
+                      dense
+                      style="width: 100px"
+                    />
+                  </div>
+                  <div class="col">
+                    <q-file
+                      v-model="uploadFile[device.id]"
+                      label="Select .bin file"
+                      outlined
+                      dense
+                      accept=".bin"
+                    >
+                      <template v-slot:prepend>
+                        <q-icon name="attach_file" />
+                      </template>
+                    </q-file>
+                  </div>
+                  <div class="col-auto">
+                    <q-btn
+                      color="primary"
+                      icon="upload"
+                      @click="uploadFirmware(device.id)"
+                      :loading="uploading[device.id]"
+                      :disable="!uploadVersion[device.id] || !uploadFile[device.id]"
+                    >
+                      <q-tooltip>Upload</q-tooltip>
+                    </q-btn>
+                  </div>
+                </div>
+              </q-card-section>
+            </q-card>
+          </q-expansion-item>
+        </q-list>
       </q-card-section>
     </q-card>
   </div>
@@ -195,8 +248,13 @@
         selectedWallet: null,
         walletOptions: [],
         devices: [],
+        loadingDevices: false,
         requests: [],
         loadingRequests: false,
+        // Firmware upload
+        uploadVersion: {},
+        uploadFile: {},
+        uploading: {},
         requestColumns: [
           { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true },
           { name: 'device', label: 'Device', field: 'device', align: 'left' },
@@ -302,12 +360,14 @@
       },
 
       async loadDevices() {
+        this.loadingDevices = true
         try {
           const response = await LNbits.api.request('GET', '/tnaflasher/api/v1/devices')
           this.devices = response.data.devices
         } catch (e) {
           console.error('Failed to load devices:', e)
         }
+        this.loadingDevices = false
       },
 
       async loadRequests() {
@@ -332,6 +392,68 @@
         }
         navigator.clipboard.writeText(this.publicUrl)
         this.$q.notify({ type: 'positive', message: 'URL copied!' })
+      },
+
+      async uploadFirmware(deviceId) {
+        const version = this.uploadVersion[deviceId]
+        const file = this.uploadFile[deviceId]
+
+        if (!version || !file) {
+          this.$q.notify({ type: 'warning', message: 'Please enter version and select a file' })
+          return
+        }
+
+        this.uploading[deviceId] = true
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
+
+          await fetch(
+            `/tnaflasher/api/v1/admin/firmware/upload?device=${deviceId}&version=${version}`,
+            {
+              method: 'POST',
+              headers: {
+                'X-Api-Key': this.g.user.wallets[0].adminkey
+              },
+              body: formData
+            }
+          )
+
+          this.$q.notify({ type: 'positive', message: `Firmware ${version} uploaded for ${deviceId}` })
+          this.uploadVersion[deviceId] = ''
+          this.uploadFile[deviceId] = null
+          await this.loadDevices()
+        } catch (e) {
+          console.error('Upload failed:', e)
+          this.$q.notify({ type: 'negative', message: 'Upload failed' })
+        }
+        this.uploading[deviceId] = false
+      },
+
+      async deleteFirmware(deviceId, version) {
+        this.$q.dialog({
+          title: 'Delete Firmware',
+          message: `Are you sure you want to delete ${deviceId} ${version}?`,
+          cancel: true,
+          persistent: true
+        }).onOk(async () => {
+          try {
+            await fetch(
+              `/tnaflasher/api/v1/admin/firmware/${deviceId}/${version}`,
+              {
+                method: 'DELETE',
+                headers: {
+                  'X-Api-Key': this.g.user.wallets[0].adminkey
+                }
+              }
+            )
+            this.$q.notify({ type: 'positive', message: `Firmware ${version} deleted` })
+            await this.loadDevices()
+          } catch (e) {
+            console.error('Delete failed:', e)
+            this.$q.notify({ type: 'negative', message: 'Delete failed' })
+          }
+        })
       }
     },
 

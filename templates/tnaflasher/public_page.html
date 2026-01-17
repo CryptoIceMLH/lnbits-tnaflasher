@@ -11,12 +11,16 @@
     </div>
 
     <!-- Browser Check -->
-    <q-banner v-if="!isChromium" class="bg-negative text-white q-mb-md">
+    <q-banner v-if="!isChromium && !browserWarningDismissed" class="bg-amber-8 text-white q-mb-md" rounded>
       <template v-slot:avatar>
-        <q-icon name="warning" />
+        <q-icon name="info" />
       </template>
-      Web Serial API is only supported in Chrome, Edge, Brave, and Opera browsers.
-      Please use a compatible browser.
+      <div class="row items-center">
+        <div class="col">
+          Web Serial API requires Chrome, Edge, Brave, or Opera browser.
+        </div>
+        <q-btn flat dense icon="close" @click="browserWarningDismissed = true" class="q-ml-sm" />
+      </div>
     </q-banner>
 
     <!-- Step 1: Connect Device -->
@@ -229,6 +233,7 @@ window.app = Vue.createApp({
     return {
       // Browser check
       isChromium: !!navigator.serial,
+      browserWarningDismissed: false,
 
       // Connection
       connected: false,

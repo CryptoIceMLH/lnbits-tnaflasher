@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import uuid4
 
 from . import db
-from .models import FlashRequest, Setting
+from .models import FlashRequest
 
 
 # ============== Flash Requests ==============
@@ -23,9 +23,17 @@ async def create_flash_request(
         """
         INSERT INTO tnaflasher.flash_requests
         (id, payment_hash, bolt11, device, version, amount_sats, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+        VALUES (:id, :payment_hash, :bolt11, :device, :version, :amount_sats, 'pending', :created_at)
         """,
-        (request_id, payment_hash, bolt11, device, version, amount_sats, now)
+        {
+            "id": request_id,
+            "payment_hash": payment_hash,
+            "bolt11": bolt11,
+            "device": device,
+            "version": version,
+            "amount_sats": amount_sats,
+            "created_at": now
+        }
     )
 
     return FlashRequest(
@@ -45,30 +53,16 @@ async def get_flash_request(payment_hash: str) -> Optional[FlashRequest]:
     """Get a flash request by payment hash"""
     row = await db.fetchone(
         """
-        SELECT id, payment_hash, bolt11, device, version, amount_sats,
-               status, token_used, created_at, paid_at, flashed_at
-        FROM tnaflasher.flash_requests
-        WHERE payment_hash = ?
+        SELECT * FROM tnaflasher.flash_requests
+        WHERE payment_hash = :payment_hash
         """,
-        (payment_hash,)
+        {"payment_hash": payment_hash}
     )
 
     if not row:
         return None
 
-    return FlashRequest(
-        id=row[0],
-        payment_hash=row[1],
-        bolt11=row[2],
-        device=row[3],
-        version=row[4],
-        amount_sats=row[5],
-        status=row[6],
-        token_used=bool(row[7]),
-        created_at=row[8],
-        paid_at=row[9],
-        flashed_at=row[10]
-    )
+    return FlashRequest(**row)
 
 
 async def mark_flash_paid(payment_hash: str) -> Optional[FlashRequest]:
@@ -78,10 +72,10 @@ async def mark_flash_paid(payment_hash: str) -> Optional[FlashRequest]:
     await db.execute(
         """
         UPDATE tnaflasher.flash_requests
-        SET status = 'paid', paid_at = ?
-        WHERE payment_hash = ? AND status = 'pending'
+        SET status = 'paid', paid_at = :paid_at
+        WHERE payment_hash = :payment_hash AND status = 'pending'
         """,
-        (now, payment_hash)
+        {"paid_at": now, "payment_hash": payment_hash}
     )
 
     return await get_flash_request(payment_hash)
@@ -93,9 +87,9 @@ async def mark_token_used(payment_hash: str) -> bool:
         """
         UPDATE tnaflasher.flash_requests
         SET token_used = TRUE
-        WHERE payment_hash = ? AND status = 'paid'
+        WHERE payment_hash = :payment_hash AND status = 'paid'
         """,
-        (payment_hash,)
+        {"payment_hash": payment_hash}
     )
     return True
 
@@ -107,10 +101,10 @@ async def mark_flash_complete(payment_hash: str) -> Optional[FlashRequest]:
     await db.execute(
         """
         UPDATE tnaflasher.flash_requests
-        SET status = 'flashed', flashed_at = ?
-        WHERE payment_hash = ? AND status = 'paid'
+        SET status = 'flashed', flashed_at = :flashed_at
+        WHERE payment_hash = :payment_hash AND status = 'paid'
         """,
-        (now, payment_hash)
+        {"flashed_at": now, "payment_hash": payment_hash}
     )
 
     return await get_flash_request(payment_hash)
@@ -120,31 +114,14 @@ async def get_all_flash_requests(limit: int = 100) -> list[FlashRequest]:
     """Get all flash requests, most recent first"""
     rows = await db.fetchall(
         """
-        SELECT id, payment_hash, bolt11, device, version, amount_sats,
-               status, token_used, created_at, paid_at, flashed_at
-        FROM tnaflasher.flash_requests
+        SELECT * FROM tnaflasher.flash_requests
         ORDER BY created_at DESC
-        LIMIT ?
+        LIMIT :limit
         """,
-        (limit,)
+        {"limit": limit}
     )
 
-    return [
-        FlashRequest(
-            id=row[0],
-            payment_hash=row[1],
-            bolt11=row[2],
-            device=row[3],
-            version=row[4],
-            amount_sats=row[5],
-            status=row[6],
-            token_used=bool(row[7]),
-            created_at=row[8],
-            paid_at=row[9],
-            flashed_at=row[10]
-        )
-        for row in rows
-    ]
+    return [FlashRequest(**row) for row in rows]
 
 
 async def get_stats() -> dict:
@@ -152,35 +129,35 @@ async def get_stats() -> dict:
     # Total flashes (status = 'flashed')
     total_row = await db.fetchone(
         """
-        SELECT COUNT(*), COALESCE(SUM(amount_sats), 0)
+        SELECT COUNT(*) as count, COALESCE(SUM(amount_sats), 0) as total
         FROM tnaflasher.flash_requests
         WHERE status = 'flashed'
         """
     )
-    total_flashes = total_row[0] if total_row else 0
-    total_sats = total_row[1] if total_row else 0
+    total_flashes = total_row["count"] if total_row else 0
+    total_sats = total_row["total"] if total_row else 0
 
     # Today's flashes
     today_start = int(time.time()) - (int(time.time()) % 86400)
     today_row = await db.fetchone(
         """
-        SELECT COUNT(*)
+        SELECT COUNT(*) as count
         FROM tnaflasher.flash_requests
-        WHERE status = 'flashed' AND flashed_at >= ?
+        WHERE status = 'flashed' AND flashed_at >= :today_start
         """,
-        (today_start,)
+        {"today_start": today_start}
     )
-    today_flashes = today_row[0] if today_row else 0
+    today_flashes = today_row["count"] if today_row else 0
 
     # Pending count
     pending_row = await db.fetchone(
         """
-        SELECT COUNT(*)
+        SELECT COUNT(*) as count
         FROM tnaflasher.flash_requests
         WHERE status = 'pending'
         """
     )
-    pending_count = pending_row[0] if pending_row else 0
+    pending_count = pending_row["count"] if pending_row else 0
 
     return {
         "total_flashes": total_flashes,
@@ -196,32 +173,33 @@ async def get_setting(key: str) -> Optional[str]:
     """Get a setting value by key"""
     row = await db.fetchone(
         """
-        SELECT value FROM tnaflasher.settings WHERE key = ?
+        SELECT value FROM tnaflasher.settings WHERE key = :key
         """,
-        (key,)
+        {"key": key}
     )
-    return row[0] if row else None
+    return row["value"] if row else None
 
 
 async def set_setting(key: str, value: str) -> None:
-    """Set a setting value"""
+    """Set a setting value (upsert)"""
     now = int(time.time())
 
-    # Try update first
-    result = await db.execute(
-        """
-        UPDATE tnaflasher.settings SET value = ?, updated_at = ? WHERE key = ?
-        """,
-        (value, now, key)
-    )
+    # Check if exists
+    existing = await get_setting(key)
 
-    # If no rows updated, insert
-    if result.rowcount == 0:
+    if existing is not None:
         await db.execute(
             """
-            INSERT INTO tnaflasher.settings (key, value, updated_at) VALUES (?, ?, ?)
+            UPDATE tnaflasher.settings SET value = :value, updated_at = :updated_at WHERE key = :key
             """,
-            (key, value, now)
+            {"value": value, "updated_at": now, "key": key}
+        )
+    else:
+        await db.execute(
+            """
+            INSERT INTO tnaflasher.settings (key, value, updated_at) VALUES (:key, :value, :updated_at)
+            """,
+            {"key": key, "value": value, "updated_at": now}
         )
 
 
