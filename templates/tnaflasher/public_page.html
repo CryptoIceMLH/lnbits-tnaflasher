@@ -219,7 +219,11 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://unpkg.com/esptool-js@0.4.6/bundle.js"></script>
+<script type="module">
+import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.6/bundle.js';
+window.ESPLoader = ESPLoader;
+window.Transport = Transport;
+</script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 <script>
 const WALLET_ID = '{{ wallet_id }}'
@@ -328,10 +332,10 @@ window.app = Vue.createApp({
         this.log('Port selected')
 
         // Create transport
-        this.transport = new esptooljs.Transport(this.port, true)
+        this.transport = new window.Transport(this.port, true)
 
         // Create loader
-        this.loader = new esptooljs.ESPLoader({
+        this.loader = new window.ESPLoader({
           transport: this.transport,
           baudrate: 115200,
           romBaudrate: 115200,
