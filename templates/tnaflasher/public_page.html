@@ -28,15 +28,18 @@
     }
 
     /* Prevent Material Icons ligatures from affecting regular text */
-    body, p, span, div, h1, h2, h3, h4, h5, h6, .q-card, .text-h6, .text-subtitle1 {
-      font-feature-settings: "liga" 0;
-      -webkit-font-feature-settings: "liga" 0;
+    * {
+      font-feature-settings: "liga" 0 !important;
+      -webkit-font-feature-settings: "liga" 0 !important;
     }
 
-    /* Only allow ligatures in icon elements */
-    .material-icons, .q-icon {
+    /* Only allow ligatures inside icon elements */
+    .material-icons,
+    .q-icon > .material-icons,
+    i.material-icons {
       font-feature-settings: "liga" 1 !important;
       -webkit-font-feature-settings: "liga" 1 !important;
+      font-family: 'Material Icons' !important;
     }
 
     .fixed-bottom {
