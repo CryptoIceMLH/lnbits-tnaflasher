@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tech Nerd Army Web Flasher</title>
-  <link href="https://fonts.googleapis.com/css2?family=Material+Icons&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.prod.css" rel="stylesheet">
   <style>
     :root {
@@ -25,21 +25,6 @@
       background-color: var(--bg-primary);
       min-height: 100vh;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-
-    /* Prevent Material Icons ligatures from affecting regular text */
-    * {
-      font-feature-settings: "liga" 0 !important;
-      -webkit-font-feature-settings: "liga" 0 !important;
-    }
-
-    /* Only allow ligatures inside icon elements */
-    .material-icons,
-    .q-icon > .material-icons,
-    i.material-icons {
-      font-feature-settings: "liga" 1 !important;
-      -webkit-font-feature-settings: "liga" 1 !important;
-      font-family: 'Material Icons' !important;
     }
 
     .fixed-bottom {
@@ -443,7 +428,7 @@
           <q-card-section>
             <div class="row items-center q-mb-sm">
               <q-icon name="campaign" color="orange" size="sm" class="q-mr-sm" />
-              <span class="text-h6 text-tna-primary">News &amp; Updates</span>
+              <span class="text-h6 text-tna-primary">News and Updates</span>
             </div>
             <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item">
               <div class="bulletin-date">${ formatBulletinDate(bulletin.created_at) }</div>

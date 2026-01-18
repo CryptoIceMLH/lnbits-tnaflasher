@@ -2,7 +2,7 @@
   "name": "TNA Flasher",
   "short_description": "Tech Nerd Army Web Flasher - Pay with Lightning to flash NerdQAxe miners",
   "tile": "/tnaflasher/static/images/tnaflasher.png",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "min_lnbits_version": "1.0.0",
   "contributors": [
     {
