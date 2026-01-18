@@ -156,7 +156,7 @@
     /* Bulletin board styles */
     .bulletin-board {
       background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
-      border-left: 4px solid var(--accent);
+      border-left: 3px solid var(--accent);
     }
 
     .bulletin-item {
@@ -168,9 +168,24 @@
       border-bottom: none;
     }
 
+    .bulletin-item-compact {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .bulletin-item-compact:last-child {
+      border-bottom: none;
+    }
+
     .bulletin-date {
       color: var(--accent);
       font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .bulletin-date-small {
+      color: var(--accent);
+      font-size: 0.65rem;
       font-weight: 600;
     }
 
@@ -204,7 +219,7 @@
         <!-- Wallet Error -->
         <q-banner v-if="walletError" class="bg-negative text-white q-mb-md" rounded>
           <template v-slot:avatar>
-            <q-icon name="error" />
+            <span style="font-size: 1.5em;">⚠️</span>
           </template>
           ${ walletError }
         </q-banner>
@@ -212,13 +227,13 @@
         <!-- Browser Check -->
         <q-banner v-if="walletValid && !isChromium && !browserWarningDismissed" class="bg-tna-secondary text-tna-accent q-mb-md" rounded style="border: 1px solid var(--accent);">
           <template v-slot:avatar>
-            <q-icon name="info" color="orange" />
+            <span style="font-size: 1.2em;">ℹ️</span>
           </template>
           <div class="row items-center">
             <div class="col text-tna-secondary">
               Web Serial API requires Chrome, Edge, Brave, or Opera browser.
             </div>
-            <q-btn flat dense icon="close" @click="browserWarningDismissed = true" class="q-ml-sm text-tna-accent" />
+            <q-btn flat dense label="✕" @click="browserWarningDismissed = true" class="q-ml-sm text-tna-accent" />
           </div>
         </q-banner>
 
@@ -233,8 +248,7 @@
             <div v-if="!connected">
               <q-btn
                 color="primary"
-                icon="usb"
-                label="Connect via USB"
+                label="🔌 Connect via USB"
                 @click="connectDevice"
                 :loading="connecting"
                 :disable="!isChromium"
@@ -242,7 +256,7 @@
             </div>
 
             <div v-else class="row items-center">
-              <q-icon name="check_circle" size="sm" class="q-mr-sm status-connected" />
+              <span class="q-mr-sm status-connected" style="font-size: 1.2em;">✓</span>
               <span class="status-connected">Connected: ${ chipInfo }</span>
               <q-space />
               <q-btn flat dense color="negative" label="Disconnect" @click="disconnectDevice" />
@@ -269,9 +283,14 @@
                   dark
                   emit-value
                   map-options
+                  dropdown-icon="none"
                   :disable="!connected || paid"
                   @update:model-value="onDeviceChange"
-                />
+                >
+                  <template v-slot:append>
+                    <span class="text-tna-muted">▼</span>
+                  </template>
+                </q-select>
               </div>
               <div class="col-12 col-sm-6">
                 <q-select
@@ -283,8 +302,13 @@
                   dark
                   emit-value
                   map-options
+                  dropdown-icon="none"
                   :disable="!connected || !selectedDevice || paid"
-                />
+                >
+                  <template v-slot:append>
+                    <span class="text-tna-muted">▼</span>
+                  </template>
+                </q-select>
               </div>
               <div class="col-12">
                 <q-checkbox
@@ -317,8 +341,7 @@
               <div v-if="!invoice" class="text-center">
                 <q-btn
                   color="primary"
-                  icon="flash_on"
-                  label="Generate Invoice"
+                  label="⚡ Generate Invoice"
                   @click="createInvoice"
                   :loading="creatingInvoice"
                   :disable="!selectedVersion"
@@ -342,7 +365,7 @@
                   class="q-mb-sm"
                 >
                   <template v-slot:append>
-                    <q-btn flat dense icon="content_copy" @click="copyInvoice" class="text-tna-accent">
+                    <q-btn flat dense label="📋" @click="copyInvoice" class="text-tna-accent">
                       <q-tooltip>Copy</q-tooltip>
                     </q-btn>
                   </template>
@@ -359,7 +382,7 @@
 
             <!-- Paid! -->
             <div v-else class="text-center">
-              <q-icon name="check_circle" size="xl" class="status-connected" />
+              <div class="status-connected" style="font-size: 3em;">✓</div>
               <div class="text-h6 status-connected q-mt-sm">Payment Confirmed!</div>
             </div>
           </q-card-section>
@@ -376,8 +399,7 @@
             <div v-if="!flashing && !flashComplete" class="text-center">
               <q-btn
                 color="primary"
-                icon="flash_on"
-                label="Start Flashing"
+                label="⚡ Start Flashing"
                 @click="startFlashing"
                 :disable="!paid || !flashToken"
                 size="lg"
@@ -401,10 +423,10 @@
 
             <!-- Flash complete -->
             <div v-if="flashComplete" class="text-center">
-              <q-icon name="check_circle" size="xl" class="status-connected" />
+              <div class="status-connected" style="font-size: 3em;">✓</div>
               <div class="text-h6 status-connected q-mt-sm">Flash Complete!</div>
               <p class="text-tna-muted q-mt-sm">Your device has been flashed successfully.</p>
-              <q-btn flat label="Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
+              <q-btn flat label="🔄 Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
             </div>
           </q-card-section>
         </q-card>
@@ -412,8 +434,8 @@
         <!-- Terminal Output -->
         <q-card v-if="walletValid && terminalOutput.length > 0" class="tna-card">
           <q-card-section>
-            <div class="text-h6 q-mb-md text-tna-primary">Console Output</div>
-            <div class="terminal-output text-tna-accent q-pa-sm" style="max-height: 200px; overflow-y: auto;">
+            <div class="text-subtitle1 q-mb-sm text-tna-primary">Console Output</div>
+            <div ref="terminalRef" class="terminal-output text-tna-accent q-pa-sm" style="max-height: 180px; overflow-y: auto; font-size: 0.75rem;">
               <div v-for="(line, i) in terminalOutput" :key="i">${ line }</div>
             </div>
           </q-card-section>
@@ -422,13 +444,13 @@
       </div>
 
       <!-- Sidebar Column - News/Bulletins -->
-      <div v-if="bulletins.length > 0" class="col-12 col-lg-4">
+      <div v-if="bulletins.length > 0" class="col-12 col-lg-3">
         <q-card class="tna-card bulletin-board" style="position: sticky; top: 16px;">
-          <q-card-section>
-            <div class="text-h6 text-tna-primary q-mb-sm">News and Updates</div>
-            <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item">
-              <div class="bulletin-date">${ formatBulletinDate(bulletin.created_at) }</div>
-              <div class="text-tna-secondary">${ bulletin.message }</div>
+          <q-card-section class="q-pa-sm">
+            <div class="text-subtitle2 text-tna-primary q-mb-xs">📢 News</div>
+            <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item-compact">
+              <div class="bulletin-date-small">${ formatBulletinDate(bulletin.created_at) }</div>
+              <div class="text-tna-secondary text-caption">${ bulletin.message }</div>
             </div>
           </q-card-section>
         </q-card>
@@ -571,6 +593,13 @@
         log(message) {
           this.terminalOutput.push(message)
           console.log(message)
+          // Auto-scroll terminal to bottom
+          this.$nextTick(() => {
+            const terminal = this.$refs.terminalRef
+            if (terminal) {
+              terminal.scrollTop = terminal.scrollHeight
+            }
+          })
         },
 
         async loadDevices() {
