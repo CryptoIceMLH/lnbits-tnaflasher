@@ -195,7 +195,7 @@
     <!-- Header -->
     <div class="text-center q-mb-lg">
       <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
-      <p class="text-subtitle1 text-tna-secondary">Pay with Lightning <q-icon name="bolt" color="orange" /> Flash your device</p>
+      <p class="text-subtitle1 text-tna-secondary">Pay with Lightning - Flash your device</p>
     </div>
 
     <div class="row q-col-gutter-md justify-center">
@@ -426,10 +426,7 @@
       <div v-if="bulletins.length > 0" class="col-12 col-lg-4">
         <q-card class="tna-card bulletin-board" style="position: sticky; top: 16px;">
           <q-card-section>
-            <div class="row items-center q-mb-sm">
-              <q-icon name="campaign" color="orange" size="sm" class="q-mr-sm" />
-              <span class="text-h6 text-tna-primary">News and Updates</span>
-            </div>
+            <div class="text-h6 text-tna-primary q-mb-sm">News and Updates</div>
             <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item">
               <div class="bulletin-date">${ formatBulletinDate(bulletin.created_at) }</div>
               <div class="text-tna-secondary">${ bulletin.message }</div>
@@ -443,7 +440,7 @@
     <!-- Footer -->
     <div class="text-center q-mt-lg q-mb-md">
       <p class="text-tna-muted text-caption">
-        Powered by <span class="text-tna-accent">Tech Nerd Army</span> <q-icon name="bolt" color="orange" size="xs" />
+        Powered by <span class="text-tna-accent">Tech Nerd Army</span> -
         <a href="https://www.molonlabe.holdings/" target="_blank" class="text-tna-accent" style="text-decoration: none;">molonlabe.holdings</a>
       </p>
     </div>
