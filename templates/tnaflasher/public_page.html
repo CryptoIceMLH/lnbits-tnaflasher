@@ -363,7 +363,7 @@
                   >
                     <template v-slot:append>
                       <q-btn
-                        v-if="!promoApplied"
+                        v-show="!promoApplied"
                         flat
                         dense
                         label="Apply"
@@ -373,10 +373,10 @@
                         class="text-tna-accent"
                       />
                       <q-btn
-                        v-else
+                        v-show="promoApplied"
                         flat
                         dense
-                        label="✕"
+                        label="X"
                         @click="clearPromoCode"
                         class="text-negative"
                       />
