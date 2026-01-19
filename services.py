@@ -21,7 +21,7 @@ from .crud import (
 # Supported devices with display names
 SUPPORTED_DEVICES = {
     "NerdQAxePlus": "NerdQAxe+",
-    "NerdQAxePlus2": "NerdQAxe+2",
+    "NerdQAxePlus2": "NerdQAxe++",
     "NerdQX": "NerdQX",
     "NerdOCTAXEPlus": "NerdOCTAXE+",
     "NerdOCTAXEGamma": "NerdOCTAXE Gamma",
