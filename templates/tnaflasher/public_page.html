@@ -208,8 +208,9 @@
   <div id="vue" v-cloak class="q-pa-md">
     <!-- Header -->
     <div class="text-center q-mb-lg">
+      <img src="/tnaflasher/static/images/btc-logo.png" alt="BTC" style="height: 80px; margin-bottom: 16px;">
       <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
-      <p class="text-subtitle1 text-tna-secondary">Pay with Lightning - Flash your device</p>
+      <p class="text-subtitle1 text-tna-secondary">Pay with Lightning - Flash your BTC tools</p>
     </div>
 
     <div class="row q-col-gutter-md justify-center">
@@ -242,7 +243,7 @@
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge color="primary" class="q-mr-sm">1</q-badge>
-              <span class="text-h6 text-tna-primary">Connect Device</span>
+              <span class="text-h6 text-tna-primary">Connect Freedom Device</span>
             </div>
 
             <div v-if="!connected">
@@ -328,7 +329,7 @@
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="selectedVersion ? 'primary' : 'grey'" class="q-mr-sm">3</q-badge>
-              <span class="text-h6 text-tna-primary">Pay to Unlock</span>
+              <span class="text-h6 text-tna-primary">Extra Freedom Cost</span>
             </div>
 
             <!-- Not yet paid -->
@@ -442,7 +443,7 @@
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
-              <span class="text-h6 text-tna-primary">Flash Device</span>
+              <span class="text-h6 text-tna-primary">Flash Your BTC Freedom Tool</span>
             </div>
 
             <!-- Flash Instructions -->
