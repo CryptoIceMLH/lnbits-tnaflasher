@@ -8,7 +8,14 @@ from typing import Optional
 
 from lnbits.core.services import create_invoice
 
-from .crud import create_flash_request, get_price, get_flash_request
+from .crud import (
+    create_flash_request,
+    get_price,
+    get_flash_request,
+    validate_promo_code,
+    increment_promo_usage,
+    mark_flash_paid,
+)
 
 
 # Supported devices with display names
@@ -75,7 +82,8 @@ def get_firmware_path(device: str, version: str) -> Optional[Path]:
 async def create_flash_invoice(
     device: str,
     version: str,
-    wallet_id: str
+    wallet_id: str,
+    promo_code: Optional[str] = None
 ) -> dict:
     """Create a Lightning invoice for a flash request"""
     # Validate device
@@ -87,18 +95,60 @@ async def create_flash_invoice(
     if not firmware_path:
         raise ValueError(f"Firmware not found: {device} {version}")
 
-    # Get price
-    price_sats = await get_price()
+    # Get base price
+    base_price = await get_price()
+    final_price = base_price
+    discount_percent = 0
 
-    # Create LNbits invoice
+    # Apply promo code if provided
+    if promo_code:
+        is_valid, discount_percent, message = await validate_promo_code(promo_code)
+        if not is_valid:
+            raise ValueError(message)
+        # Calculate discounted price
+        discount_amount = int(base_price * discount_percent / 100)
+        final_price = base_price - discount_amount
+
+    # Handle 100% discount (free flash)
+    if final_price <= 0:
+        # Generate a pseudo payment hash for free flashes
+        free_hash = hashlib.sha256(f"{device}{version}{time.time()}{os.urandom(8).hex()}".encode()).hexdigest()
+
+        # Store flash request as already paid
+        await create_flash_request(
+            payment_hash=free_hash,
+            bolt11="FREE",
+            device=device,
+            version=version,
+            amount_sats=0
+        )
+
+        # Mark as paid immediately
+        await mark_flash_paid(free_hash)
+
+        # Increment promo code usage
+        if promo_code:
+            await increment_promo_usage(promo_code)
+
+        # No expiry needed for free flashes
+        return {
+            "payment_hash": free_hash,
+            "bolt11": "FREE",
+            "amount": 0,
+            "expires_at": int(time.time()) + (60 * 60)  # 1 hour to complete flash
+        }
+
+    # Create LNbits invoice for paid flashes
     payment = await create_invoice(
         wallet_id=wallet_id,
-        amount=price_sats,
-        memo=f"TNA Flash: {SUPPORTED_DEVICES[device]} {version}",
+        amount=final_price,
+        memo=f"TNA Flash: {SUPPORTED_DEVICES[device]} {version}" + (f" ({discount_percent}% off)" if discount_percent > 0 else ""),
         extra={
             "tag": "tnaflasher",
             "device": device,
-            "version": version
+            "version": version,
+            "promo_code": promo_code if promo_code else None,
+            "discount_percent": discount_percent
         }
     )
 
@@ -108,8 +158,12 @@ async def create_flash_invoice(
         bolt11=payment.bolt11,
         device=device,
         version=version,
-        amount_sats=price_sats
+        amount_sats=final_price
     )
+
+    # Increment promo code usage (it will be counted when invoice is created)
+    if promo_code:
+        await increment_promo_usage(promo_code)
 
     # Calculate expiry time (15 minutes from now)
     expires_at = int(time.time()) + (15 * 60)
@@ -117,7 +171,7 @@ async def create_flash_invoice(
     return {
         "payment_hash": payment.payment_hash,
         "bolt11": payment.bolt11,
-        "amount": price_sats,
+        "amount": final_price,
         "expires_at": expires_at
     }
 

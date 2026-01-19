@@ -21,6 +21,7 @@ class CreateFlashRequest(BaseModel):
     """Data needed to create a flash request"""
     device: str
     version: str
+    promo_code: Optional[str] = None
 
 
 class FlashInvoiceResponse(BaseModel):
@@ -85,3 +86,33 @@ class CreateBulletin(BaseModel):
 class BulletinsResponse(BaseModel):
     """List of bulletins"""
     bulletins: list[Bulletin]
+
+
+class PromoCode(BaseModel):
+    """Promo code for discounts"""
+    id: str
+    code: str
+    discount_percent: int  # 1-100
+    max_uses: int
+    used_count: int = 0
+    active: bool = True
+    created_at: Optional[int] = None
+
+
+class CreatePromoCode(BaseModel):
+    """Data needed to create a promo code"""
+    code: str
+    discount_percent: int
+    max_uses: int
+
+
+class PromoCodesResponse(BaseModel):
+    """List of promo codes"""
+    promo_codes: list[PromoCode]
+
+
+class ValidatePromoResponse(BaseModel):
+    """Response for promo code validation"""
+    valid: bool
+    discount_percent: int = 0
+    message: str = ""

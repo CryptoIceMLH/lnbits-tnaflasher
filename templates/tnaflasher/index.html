@@ -172,6 +172,109 @@
     </q-card>
   </div>
 
+  <!-- Promo Codes Management -->
+  <div class="col-12 col-md-6">
+    <q-card>
+      <q-card-section>
+        <div class="row items-center q-mb-md">
+          <div class="text-h6">Promo Codes</div>
+          <q-space></q-space>
+          <q-btn flat icon="refresh" @click="loadPromoCodes" :loading="loadingPromoCodes">
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
+        </div>
+
+        <!-- Add new promo code -->
+        <div class="row q-col-gutter-sm q-mb-md items-end">
+          <div class="col-12 col-sm-4">
+            <q-input
+              v-model="newPromoCode"
+              label="Code"
+              outlined
+              dense
+              placeholder="e.g. SUMMER2024"
+              :rules="[val => !!val || 'Required']"
+            />
+          </div>
+          <div class="col-6 col-sm-3">
+            <q-input
+              v-model.number="newPromoDiscount"
+              type="number"
+              label="Discount %"
+              outlined
+              dense
+              min="1"
+              max="100"
+              :rules="[val => val >= 1 && val <= 100 || '1-100']"
+            />
+          </div>
+          <div class="col-6 col-sm-3">
+            <q-input
+              v-model.number="newPromoMaxUses"
+              type="number"
+              label="Max Uses"
+              outlined
+              dense
+              min="1"
+              :rules="[val => val >= 1 || 'Min 1']"
+            />
+          </div>
+          <div class="col-auto">
+            <q-btn
+              color="primary"
+              icon="add"
+              @click="addPromoCode"
+              :loading="addingPromoCode"
+              :disable="!newPromoCode || !newPromoDiscount || !newPromoMaxUses"
+            >
+              <q-tooltip>Add Promo Code</q-tooltip>
+            </q-btn>
+          </div>
+        </div>
+
+        <!-- Existing promo codes -->
+        <q-list v-if="promoCodes.length > 0" bordered separator>
+          <q-item v-for="promo in promoCodes" :key="promo.id">
+            <q-item-section avatar>
+              <q-icon :name="promo.active ? 'local_offer' : 'visibility_off'" :color="promo.active ? 'orange' : 'grey'" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label :class="{ 'text-grey': !promo.active }">
+                <span class="text-weight-bold">${ promo.code }</span>
+                <q-badge :color="promo.discount_percent === 100 ? 'positive' : 'primary'" class="q-ml-sm">
+                  ${ promo.discount_percent }% off
+                </q-badge>
+              </q-item-label>
+              <q-item-label caption>
+                Used: ${ promo.used_count } / ${ promo.max_uses }
+                <span v-if="promo.used_count >= promo.max_uses" class="text-negative">(exhausted)</span>
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <div class="row q-gutter-xs">
+                <q-btn
+                  flat
+                  dense
+                  :icon="promo.active ? 'visibility_off' : 'visibility'"
+                  @click="togglePromoCode(promo)"
+                  :color="promo.active ? 'warning' : 'positive'"
+                >
+                  <q-tooltip>${ promo.active ? 'Disable' : 'Enable' }</q-tooltip>
+                </q-btn>
+                <q-btn flat dense icon="delete" color="negative" @click="deletePromoCode(promo)">
+                  <q-tooltip>Delete</q-tooltip>
+                </q-btn>
+              </div>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <div v-else class="text-grey text-center q-pa-md">
+          No promo codes yet. Add one above to offer discounts.
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+
   <!-- Firmware Management -->
   <div class="col-12 col-md-6">
     <q-card>
@@ -331,6 +434,13 @@
         loadingBulletins: false,
         newBulletinMessage: '',
         addingBulletin: false,
+        // Promo Codes
+        promoCodes: [],
+        loadingPromoCodes: false,
+        newPromoCode: '',
+        newPromoDiscount: 10,
+        newPromoMaxUses: 1,
+        addingPromoCode: false,
         requestColumns: [
           { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true },
           { name: 'device', label: 'Device', field: 'device', align: 'left' },
@@ -617,6 +727,82 @@
             LNbits.utils.notifyApiError(e)
           }
         })
+      },
+
+      // Promo Code methods
+      async loadPromoCodes() {
+        this.loadingPromoCodes = true
+        try {
+          const response = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/promo-codes',
+            this.g.user.wallets[0].adminkey
+          )
+          this.promoCodes = response.data.promo_codes || []
+        } catch (e) {
+          console.error('Failed to load promo codes:', e)
+        }
+        this.loadingPromoCodes = false
+      },
+
+      async addPromoCode() {
+        if (!this.newPromoCode || !this.newPromoDiscount || !this.newPromoMaxUses) return
+        this.addingPromoCode = true
+        try {
+          await LNbits.api.request(
+            'POST',
+            '/tnaflasher/api/v1/admin/promo-codes',
+            this.g.user.wallets[0].adminkey,
+            {
+              code: this.newPromoCode,
+              discount_percent: this.newPromoDiscount,
+              max_uses: this.newPromoMaxUses
+            }
+          )
+          this.$q.notify({ type: 'positive', message: 'Promo code created!' })
+          this.newPromoCode = ''
+          this.newPromoDiscount = 10
+          this.newPromoMaxUses = 1
+          await this.loadPromoCodes()
+        } catch (e) {
+          LNbits.utils.notifyApiError(e)
+        }
+        this.addingPromoCode = false
+      },
+
+      async togglePromoCode(promo) {
+        try {
+          await LNbits.api.request(
+            'PUT',
+            `/tnaflasher/api/v1/admin/promo-codes/${promo.id}?active=${!promo.active}`,
+            this.g.user.wallets[0].adminkey
+          )
+          this.$q.notify({ type: 'positive', message: promo.active ? 'Promo code disabled' : 'Promo code enabled' })
+          await this.loadPromoCodes()
+        } catch (e) {
+          LNbits.utils.notifyApiError(e)
+        }
+      },
+
+      async deletePromoCode(promo) {
+        this.$q.dialog({
+          title: 'Delete Promo Code',
+          message: `Are you sure you want to delete promo code "${promo.code}"?`,
+          cancel: true,
+          persistent: true
+        }).onOk(async () => {
+          try {
+            await LNbits.api.request(
+              'DELETE',
+              `/tnaflasher/api/v1/admin/promo-codes/${promo.id}`,
+              this.g.user.wallets[0].adminkey
+            )
+            this.$q.notify({ type: 'positive', message: 'Promo code deleted' })
+            await this.loadPromoCodes()
+          } catch (e) {
+            LNbits.utils.notifyApiError(e)
+          }
+        })
       }
     },
 
@@ -634,6 +820,7 @@
       await this.loadDevices()
       await this.loadRequests()
       await this.loadBulletins()
+      await this.loadPromoCodes()
     }
   })
 

@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import uuid4
 
 from . import db
-from .models import FlashRequest, Bulletin
+from .models import FlashRequest, Bulletin, PromoCode
 
 
 # ============== Flash Requests ==============
@@ -313,5 +313,124 @@ async def delete_bulletin(bulletin_id: str) -> bool:
         DELETE FROM tnaflasher.bulletins WHERE id = :id
         """,
         {"id": bulletin_id}
+    )
+    return True
+
+
+# ============== Promo Codes ==============
+
+async def create_promo_code(code: str, discount_percent: int, max_uses: int) -> PromoCode:
+    """Create a new promo code"""
+    promo_id = str(uuid4())
+    now = int(time.time())
+
+    await db.execute(
+        """
+        INSERT INTO tnaflasher.promo_codes (id, code, discount_percent, max_uses, used_count, active, created_at)
+        VALUES (:id, :code, :discount_percent, :max_uses, 0, TRUE, :created_at)
+        """,
+        {
+            "id": promo_id,
+            "code": code.upper(),
+            "discount_percent": discount_percent,
+            "max_uses": max_uses,
+            "created_at": now
+        }
+    )
+
+    return PromoCode(
+        id=promo_id,
+        code=code.upper(),
+        discount_percent=discount_percent,
+        max_uses=max_uses,
+        used_count=0,
+        active=True,
+        created_at=now
+    )
+
+
+async def get_promo_codes() -> list[PromoCode]:
+    """Get all promo codes for admin"""
+    rows = await db.fetchall(
+        """
+        SELECT * FROM tnaflasher.promo_codes
+        ORDER BY created_at DESC
+        """
+    )
+    return [PromoCode(**row) for row in rows]
+
+
+async def get_promo_code_by_code(code: str) -> Optional[PromoCode]:
+    """Get a promo code by its code string"""
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.promo_codes
+        WHERE code = :code
+        """,
+        {"code": code.upper()}
+    )
+    return PromoCode(**row) if row else None
+
+
+async def validate_promo_code(code: str) -> tuple[bool, int, str]:
+    """
+    Validate a promo code.
+    Returns: (is_valid, discount_percent, message)
+    """
+    promo = await get_promo_code_by_code(code)
+
+    if not promo:
+        return (False, 0, "Invalid promo code")
+
+    if not promo.active:
+        return (False, 0, "Promo code is inactive")
+
+    if promo.used_count >= promo.max_uses:
+        return (False, 0, "Promo code has reached its usage limit")
+
+    return (True, promo.discount_percent, f"{promo.discount_percent}% discount applied!")
+
+
+async def increment_promo_usage(code: str) -> bool:
+    """Increment the usage count for a promo code"""
+    await db.execute(
+        """
+        UPDATE tnaflasher.promo_codes
+        SET used_count = used_count + 1
+        WHERE code = :code
+        """,
+        {"code": code.upper()}
+    )
+    return True
+
+
+async def update_promo_code(promo_id: str, active: bool = None) -> Optional[PromoCode]:
+    """Update a promo code (toggle active status)"""
+    if active is not None:
+        await db.execute(
+            """
+            UPDATE tnaflasher.promo_codes
+            SET active = :active
+            WHERE id = :id
+            """,
+            {"active": active, "id": promo_id}
+        )
+
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.promo_codes WHERE id = :id
+        """,
+        {"id": promo_id}
+    )
+    return PromoCode(**row) if row else None
+
+
+async def delete_promo_code(promo_id: str) -> bool:
+    """Delete a promo code"""
+    await db.execute(
+        """
+        DELETE FROM tnaflasher.promo_codes WHERE id = :id
+        """,
+        {"id": promo_id}
     )
     return True

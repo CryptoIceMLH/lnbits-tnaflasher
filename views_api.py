@@ -13,6 +13,9 @@ from .models import (
     StatsResponse,
     CreateBulletin,
     BulletinsResponse,
+    CreatePromoCode,
+    PromoCodesResponse,
+    ValidatePromoResponse,
 )
 from .crud import (
     get_all_flash_requests,
@@ -27,6 +30,11 @@ from .crud import (
     get_bulletins,
     update_bulletin,
     delete_bulletin,
+    create_promo_code,
+    get_promo_codes,
+    validate_promo_code,
+    update_promo_code,
+    delete_promo_code,
 )
 from .services import (
     get_available_devices,
@@ -73,7 +81,8 @@ async def api_create_invoice(
         result = await create_flash_invoice(
             device=data.device,
             version=data.version,
-            wallet_id=wallet_id
+            wallet_id=wallet_id,
+            promo_code=data.promo_code
         )
         return FlashInvoiceResponse(
             payment_hash=result["payment_hash"],
@@ -289,4 +298,62 @@ async def api_admin_delete_bulletin(
 ):
     """Delete a bulletin (admin only)"""
     await delete_bulletin(bulletin_id)
+    return {"success": True}
+
+
+# ============== Promo Code Endpoints ==============
+
+@tnaflasher_api_router.post("/validate-promo")
+async def api_validate_promo(code: str = Query(...)) -> ValidatePromoResponse:
+    """Validate a promo code (public endpoint)"""
+    is_valid, discount_percent, message = await validate_promo_code(code)
+    return ValidatePromoResponse(
+        valid=is_valid,
+        discount_percent=discount_percent,
+        message=message
+    )
+
+
+@tnaflasher_api_router.get("/admin/promo-codes")
+async def api_admin_get_promo_codes(user: User = Depends(check_admin)) -> PromoCodesResponse:
+    """Get all promo codes (admin only)"""
+    promo_codes = await get_promo_codes()
+    return PromoCodesResponse(promo_codes=promo_codes)
+
+
+@tnaflasher_api_router.post("/admin/promo-codes")
+async def api_admin_create_promo_code(
+    data: CreatePromoCode,
+    user: User = Depends(check_admin)
+):
+    """Create a new promo code (admin only)"""
+    if data.discount_percent < 1 or data.discount_percent > 100:
+        raise HTTPException(status_code=400, detail="Discount must be between 1 and 100")
+    if data.max_uses < 1:
+        raise HTTPException(status_code=400, detail="Max uses must be at least 1")
+
+    promo = await create_promo_code(data.code, data.discount_percent, data.max_uses)
+    return promo.dict()
+
+
+@tnaflasher_api_router.put("/admin/promo-codes/{promo_id}")
+async def api_admin_update_promo_code(
+    promo_id: str,
+    active: bool = Query(...),
+    user: User = Depends(check_admin)
+):
+    """Update a promo code (toggle active status) (admin only)"""
+    promo = await update_promo_code(promo_id, active=active)
+    if not promo:
+        raise HTTPException(status_code=404, detail="Promo code not found")
+    return promo.dict()
+
+
+@tnaflasher_api_router.delete("/admin/promo-codes/{promo_id}")
+async def api_admin_delete_promo_code(
+    promo_id: str,
+    user: User = Depends(check_admin)
+):
+    """Delete a promo code (admin only)"""
+    await delete_promo_code(promo_id)
     return {"success": True}

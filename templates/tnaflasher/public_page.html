@@ -334,8 +334,57 @@
             <!-- Not yet paid -->
             <div v-if="!paid">
               <div class="text-center q-mb-md">
-                <div class="text-h4 text-weight-bold text-tna-accent">${ formatSats(priceSats) } SATS</div>
+                <div class="text-h4 text-weight-bold text-tna-accent">
+                  <span v-if="promoApplied && promoDiscount > 0">
+                    <span style="text-decoration: line-through; opacity: 0.6;">${ formatSats(priceSats) }</span>
+                    ${ formatSats(discountedPrice) } SATS
+                  </span>
+                  <span v-else>${ formatSats(priceSats) } SATS</span>
+                </div>
+                <div v-if="promoApplied && promoDiscount > 0" class="text-caption" style="color: #4caf50;">
+                  ${ promoDiscount }% discount applied!
+                </div>
+                <div v-if="promoApplied && promoDiscount === 100" class="text-caption" style="color: #4caf50;">
+                  FREE FLASH! 🎉
+                </div>
               </div>
+
+              <!-- Promo code input (show before invoice is created) -->
+              <div v-if="!invoice" class="row q-col-gutter-sm q-mb-md justify-center items-end">
+                <div class="col-12 col-sm-6">
+                  <q-input
+                    v-model="promoCode"
+                    label="Promo Code (optional)"
+                    outlined
+                    dense
+                    dark
+                    :disable="promoApplied"
+                    placeholder="Enter promo code"
+                  >
+                    <template v-slot:append>
+                      <q-btn
+                        v-if="!promoApplied"
+                        flat
+                        dense
+                        label="Apply"
+                        @click="applyPromoCode"
+                        :loading="validatingPromo"
+                        :disable="!promoCode"
+                        class="text-tna-accent"
+                      />
+                      <q-btn
+                        v-else
+                        flat
+                        dense
+                        label="✕"
+                        @click="clearPromoCode"
+                        class="text-negative"
+                      />
+                    </template>
+                  </q-input>
+                </div>
+              </div>
+              <div v-if="promoError" class="text-center text-negative text-caption q-mb-md">${ promoError }</div>
 
               <!-- No invoice yet -->
               <div v-if="!invoice" class="text-center">
@@ -394,6 +443,16 @@
             <div class="row items-center q-mb-md">
               <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
               <span class="text-h6 text-tna-primary">Flash Device</span>
+            </div>
+
+            <!-- Flash Instructions -->
+            <div v-if="paid && !flashComplete" class="q-mb-md q-pa-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px;">
+              <div class="text-weight-bold text-tna-accent q-mb-sm">⚠️ IMPORTANT Instructions:</div>
+              <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height: 1.8;">
+                <li>WHEN FLASH REACHES 100% it will take 30-45 Seconds for FLASH to SAY COMPLETE! <strong class="text-tna-accent">WAIT!! DO NOT REFRESH!</strong></li>
+                <li>AFTER FLASH SAYS COMPLETE SCREEN WILL TAKE 30SEC TO BOOT</li>
+                <li>AFTER FLASH SAYS COMPLETE SCREEN WILL TAKE 30SEC TO BOOT</li>
+              </ol>
             </div>
 
             <div v-if="!flashing && !flashComplete" class="text-center">
@@ -544,6 +603,13 @@
           paid: false,
           flashToken: null,
 
+          // Promo codes
+          promoCode: '',
+          promoApplied: false,
+          promoDiscount: 0,
+          promoError: '',
+          validatingPromo: false,
+
           // Flashing
           flashing: false,
           flashProgress: 0,
@@ -576,6 +642,12 @@
         qrCodeUrl() {
           if (!this.invoice) return ''
           return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(this.invoice.toUpperCase())}`
+        },
+
+        discountedPrice() {
+          if (!this.promoApplied || this.promoDiscount === 0) return this.priceSats
+          const discount = Math.floor(this.priceSats * this.promoDiscount / 100)
+          return Math.max(0, this.priceSats - discount)
         }
       },
 
@@ -684,28 +756,73 @@
           this.selectedVersion = null
         },
 
-        async createInvoice() {
-          this.creatingInvoice = true
+        async applyPromoCode() {
+          if (!this.promoCode) return
+          this.validatingPromo = true
+          this.promoError = ''
           try {
             const response = await api.request(
               'POST',
+              `/tnaflasher/api/v1/validate-promo?code=${encodeURIComponent(this.promoCode)}`
+            )
+            if (response.data.valid) {
+              this.promoApplied = true
+              this.promoDiscount = response.data.discount_percent
+              this.notify('positive', response.data.message)
+            } else {
+              this.promoError = response.data.message
+            }
+          } catch (e) {
+            this.promoError = e.response?.data?.detail || 'Failed to validate promo code'
+          }
+          this.validatingPromo = false
+        },
+
+        clearPromoCode() {
+          this.promoCode = ''
+          this.promoApplied = false
+          this.promoDiscount = 0
+          this.promoError = ''
+        },
+
+        async createInvoice() {
+          this.creatingInvoice = true
+          try {
+            const requestData = {
+              device: this.selectedDevice,
+              version: this.selectedVersion
+            }
+            // Include promo code if applied
+            if (this.promoApplied && this.promoCode) {
+              requestData.promo_code = this.promoCode
+            }
+
+            const response = await api.request(
+              'POST',
               `/tnaflasher/api/v1/flash/invoice?wallet_id=${WALLET_ID}`,
-              {
-                device: this.selectedDevice,
-                version: this.selectedVersion
-              }
+              requestData
             )
 
             this.invoice = response.data.bolt11
             this.paymentHash = response.data.payment_hash
             this.expiresAt = response.data.expires_at
 
-            // Start countdown
-            this.updateExpiryCountdown()
-            this.expiryInterval = setInterval(() => this.updateExpiryCountdown(), 1000)
+            // Handle free flash (100% discount)
+            if (response.data.bolt11 === 'FREE' || response.data.amount === 0) {
+              // Skip payment, go straight to paid state
+              this.paid = true
+              this.flashToken = null // Will get token from status check
+              this.notify('positive', 'Free flash activated!')
+              // Start checking for token
+              this.startPaymentCheck()
+            } else {
+              // Start countdown
+              this.updateExpiryCountdown()
+              this.expiryInterval = setInterval(() => this.updateExpiryCountdown(), 1000)
 
-            // Start checking payment status
-            this.startPaymentCheck()
+              // Start checking payment status
+              this.startPaymentCheck()
+            }
 
           } catch (e) {
             this.notify('negative', e.response?.data?.detail || e.message || 'Failed to create invoice')
@@ -847,6 +964,11 @@
           this.flashProgress = 0
           this.flashComplete = false
           this.terminalOutput = []
+          // Reset promo code
+          this.promoCode = ''
+          this.promoApplied = false
+          this.promoDiscount = 0
+          this.promoError = ''
         }
       },
 

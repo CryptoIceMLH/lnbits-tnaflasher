@@ -56,3 +56,20 @@ async def m003_create_bulletins(db):
         )
         """
     )
+
+
+async def m004_create_promo_codes(db):
+    """Create the promo_codes table for discount codes"""
+    await db.execute(
+        """
+        CREATE TABLE tnaflasher.promo_codes (
+            id TEXT PRIMARY KEY,
+            code TEXT UNIQUE NOT NULL,
+            discount_percent INTEGER NOT NULL,
+            max_uses INTEGER NOT NULL,
+            used_count INTEGER NOT NULL DEFAULT 0,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
