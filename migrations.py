@@ -73,3 +73,35 @@ async def m004_create_promo_codes(db):
         )
         """
     )
+
+
+async def m005_create_miners(db):
+    """Create the miners table for dynamic miner management"""
+    await db.execute(
+        """
+        CREATE TABLE tnaflasher.miners (
+            id TEXT PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+
+async def m006_create_firmware(db):
+    """Create the firmware table for per-miner firmware with individual pricing"""
+    await db.execute(
+        """
+        CREATE TABLE tnaflasher.firmware (
+            id TEXT PRIMARY KEY,
+            miner_id TEXT NOT NULL REFERENCES tnaflasher.miners(id) ON DELETE CASCADE,
+            version TEXT NOT NULL,
+            price_sats INTEGER NOT NULL,
+            notes TEXT,
+            discount_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            file_path TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(miner_id, version)
+        )
+        """
+    )

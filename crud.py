@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import uuid4
 
 from . import db
-from .models import FlashRequest, Bulletin, PromoCode
+from .models import FlashRequest, Bulletin, PromoCode, Miner, Firmware
 
 
 # ============== Flash Requests ==============
@@ -434,3 +434,215 @@ async def delete_promo_code(promo_id: str) -> bool:
         {"id": promo_id}
     )
     return True
+
+
+# ============== Miners ==============
+
+async def create_miner(name: str) -> Miner:
+    """Create a new miner"""
+    miner_id = str(uuid4())
+    now = int(time.time())
+
+    await db.execute(
+        """
+        INSERT INTO tnaflasher.miners (id, name, created_at)
+        VALUES (:id, :name, :created_at)
+        """,
+        {"id": miner_id, "name": name, "created_at": now}
+    )
+
+    return Miner(
+        id=miner_id,
+        name=name,
+        created_at=now
+    )
+
+
+async def get_miners() -> list[Miner]:
+    """Get all miners"""
+    rows = await db.fetchall(
+        """
+        SELECT * FROM tnaflasher.miners
+        ORDER BY name ASC
+        """
+    )
+    return [Miner(**row) for row in rows]
+
+
+async def get_miner(miner_id: str) -> Optional[Miner]:
+    """Get a miner by ID"""
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.miners WHERE id = :id
+        """,
+        {"id": miner_id}
+    )
+    return Miner(**row) if row else None
+
+
+async def get_miner_by_name(name: str) -> Optional[Miner]:
+    """Get a miner by name"""
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.miners WHERE name = :name
+        """,
+        {"name": name}
+    )
+    return Miner(**row) if row else None
+
+
+async def delete_miner(miner_id: str) -> bool:
+    """Delete a miner and all its firmware (cascade)"""
+    # First delete all firmware for this miner
+    await db.execute(
+        """
+        DELETE FROM tnaflasher.firmware WHERE miner_id = :miner_id
+        """,
+        {"miner_id": miner_id}
+    )
+    # Then delete the miner
+    await db.execute(
+        """
+        DELETE FROM tnaflasher.miners WHERE id = :id
+        """,
+        {"id": miner_id}
+    )
+    return True
+
+
+# ============== Firmware ==============
+
+async def create_firmware(
+    miner_id: str,
+    version: str,
+    price_sats: int,
+    file_path: str,
+    notes: Optional[str] = None,
+    discount_enabled: bool = True
+) -> Firmware:
+    """Create a new firmware entry"""
+    firmware_id = str(uuid4())
+    now = int(time.time())
+
+    await db.execute(
+        """
+        INSERT INTO tnaflasher.firmware (id, miner_id, version, price_sats, notes, discount_enabled, file_path, created_at)
+        VALUES (:id, :miner_id, :version, :price_sats, :notes, :discount_enabled, :file_path, :created_at)
+        """,
+        {
+            "id": firmware_id,
+            "miner_id": miner_id,
+            "version": version,
+            "price_sats": price_sats,
+            "notes": notes,
+            "discount_enabled": discount_enabled,
+            "file_path": file_path,
+            "created_at": now
+        }
+    )
+
+    return Firmware(
+        id=firmware_id,
+        miner_id=miner_id,
+        version=version,
+        price_sats=price_sats,
+        notes=notes,
+        discount_enabled=discount_enabled,
+        file_path=file_path,
+        created_at=now
+    )
+
+
+async def get_firmware_by_miner(miner_id: str) -> list[Firmware]:
+    """Get all firmware for a miner"""
+    rows = await db.fetchall(
+        """
+        SELECT * FROM tnaflasher.firmware
+        WHERE miner_id = :miner_id
+        ORDER BY created_at DESC
+        """,
+        {"miner_id": miner_id}
+    )
+    return [Firmware(**row) for row in rows]
+
+
+async def get_firmware(firmware_id: str) -> Optional[Firmware]:
+    """Get firmware by ID"""
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.firmware WHERE id = :id
+        """,
+        {"id": firmware_id}
+    )
+    return Firmware(**row) if row else None
+
+
+async def get_firmware_by_miner_and_version(miner_id: str, version: str) -> Optional[Firmware]:
+    """Get firmware by miner ID and version"""
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.firmware
+        WHERE miner_id = :miner_id AND version = :version
+        """,
+        {"miner_id": miner_id, "version": version}
+    )
+    return Firmware(**row) if row else None
+
+
+async def update_firmware(
+    firmware_id: str,
+    price_sats: Optional[int] = None,
+    notes: Optional[str] = None,
+    discount_enabled: Optional[bool] = None
+) -> Optional[Firmware]:
+    """Update firmware details"""
+    updates = []
+    params = {"id": firmware_id}
+
+    if price_sats is not None:
+        updates.append("price_sats = :price_sats")
+        params["price_sats"] = price_sats
+
+    if notes is not None:
+        updates.append("notes = :notes")
+        params["notes"] = notes
+
+    if discount_enabled is not None:
+        updates.append("discount_enabled = :discount_enabled")
+        params["discount_enabled"] = discount_enabled
+
+    if not updates:
+        return await get_firmware(firmware_id)
+
+    await db.execute(
+        f"""
+        UPDATE tnaflasher.firmware
+        SET {', '.join(updates)}
+        WHERE id = :id
+        """,
+        params
+    )
+
+    return await get_firmware(firmware_id)
+
+
+async def delete_firmware(firmware_id: str) -> bool:
+    """Delete a firmware entry"""
+    await db.execute(
+        """
+        DELETE FROM tnaflasher.firmware WHERE id = :id
+        """,
+        {"id": firmware_id}
+    )
+    return True
+
+
+async def get_all_firmware() -> list[Firmware]:
+    """Get all firmware entries"""
+    rows = await db.fetchall(
+        """
+        SELECT * FROM tnaflasher.firmware
+        ORDER BY miner_id, version
+        """
+    )
+    return [Firmware(**row) for row in rows]

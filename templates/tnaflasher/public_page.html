@@ -202,6 +202,14 @@
       border-radius: 8px;
       font-family: 'Courier New', monospace;
     }
+
+    /* Firmware notes box */
+    .firmware-notes {
+      background: rgba(247, 147, 26, 0.1);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+    }
   </style>
 </head>
 <body>
@@ -238,8 +246,18 @@
           </div>
         </q-banner>
 
+        <!-- No Firmware Available -->
+        <q-banner v-if="walletValid && devices.length === 0" class="bg-tna-secondary text-tna-accent q-mb-md" rounded style="border: 1px solid var(--accent);">
+          <template v-slot:avatar>
+            <span style="font-size: 1.2em;">ℹ️</span>
+          </template>
+          <div class="text-tna-secondary">
+            No firmware available at the moment. Please check back later.
+          </div>
+        </q-banner>
+
         <!-- Step 1: Connect Device -->
-        <q-card v-if="walletValid" class="q-mb-md tna-card">
+        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge color="primary" class="q-mr-sm">1</q-badge>
@@ -249,7 +267,7 @@
             <div v-if="!connected">
               <q-btn
                 color="primary"
-                label="🔌 Connect via USB"
+                label="Connect via USB"
                 @click="connectDevice"
                 :loading="connecting"
                 :disable="!isChromium"
@@ -266,7 +284,7 @@
         </q-card>
 
         <!-- Step 2: Select Device & Firmware -->
-        <q-card v-if="walletValid" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !connected }">
+        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !connected }">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="connected ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
@@ -305,12 +323,22 @@
                   map-options
                   dropdown-icon="none"
                   :disable="!connected || !selectedDevice || paid"
+                  @update:model-value="onVersionChange"
                 >
                   <template v-slot:append>
                     <span class="text-tna-muted">▼</span>
                   </template>
                 </q-select>
               </div>
+
+              <!-- Firmware Notes -->
+              <div v-if="selectedFirmwareNotes" class="col-12">
+                <div class="firmware-notes">
+                  <div class="text-weight-bold text-tna-accent q-mb-xs">Firmware Notes:</div>
+                  <div class="text-tna-secondary">${ selectedFirmwareNotes }</div>
+                </div>
+              </div>
+
               <div class="col-12">
                 <q-checkbox
                   v-model="keepConfig"
@@ -325,7 +353,7 @@
         </q-card>
 
         <!-- Step 3: Pay -->
-        <q-card v-if="walletValid" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !selectedVersion }">
+        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !selectedVersion }">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="selectedVersion ? 'primary' : 'grey'" class="q-mr-sm">3</q-badge>
@@ -337,10 +365,10 @@
               <div class="text-center q-mb-md">
                 <div class="text-h4 text-weight-bold text-tna-accent">
                   <span v-if="promoApplied && promoDiscount > 0">
-                    <span style="text-decoration: line-through; opacity: 0.6;">${ formatSats(priceSats) }</span>
+                    <span style="text-decoration: line-through; opacity: 0.6;">${ formatSats(selectedFirmwarePrice) }</span>
                     ${ formatSats(discountedPrice) } SATS
                   </span>
-                  <span v-else>${ formatSats(priceSats) } SATS</span>
+                  <span v-else>${ formatSats(selectedFirmwarePrice) } SATS</span>
                 </div>
                 <div v-if="promoApplied && promoDiscount > 0" class="text-caption" style="color: #4caf50;">
                   ${ promoDiscount }% discount applied!
@@ -351,7 +379,7 @@
               </div>
 
               <!-- Promo code input (show before invoice is created) -->
-              <div v-if="!invoice" class="row q-col-gutter-sm q-mb-md justify-center items-end">
+              <div v-if="!invoice && selectedFirmwareDiscountEnabled" class="row q-col-gutter-sm q-mb-md justify-center items-end">
                 <div class="col-12 col-sm-6">
                   <q-input
                     v-model="promoCode"
@@ -385,13 +413,19 @@
                   </q-input>
                 </div>
               </div>
+
+              <!-- No discount allowed message -->
+              <div v-if="!invoice && selectedVersion && !selectedFirmwareDiscountEnabled" class="text-center text-caption text-tna-muted q-mb-md">
+                Promo codes not available for this firmware version
+              </div>
+
               <div v-if="promoError" class="text-center text-negative text-caption q-mb-md">${ promoError }</div>
 
               <!-- No invoice yet -->
               <div v-if="!invoice" class="text-center">
                 <q-btn
                   color="primary"
-                  label="⚡ Generate Invoice"
+                  label="Generate Invoice"
                   @click="createInvoice"
                   :loading="creatingInvoice"
                   :disable="!selectedVersion"
@@ -415,7 +449,7 @@
                   class="q-mb-sm"
                 >
                   <template v-slot:append>
-                    <q-btn flat dense label="📋" @click="copyInvoice" class="text-tna-accent">
+                    <q-btn flat dense label="Copy" @click="copyInvoice" class="text-tna-accent">
                       <q-tooltip>Copy</q-tooltip>
                     </q-btn>
                   </template>
@@ -439,7 +473,7 @@
         </q-card>
 
         <!-- Step 4: Flash -->
-        <q-card v-if="walletValid" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
+        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
@@ -448,7 +482,7 @@
 
             <!-- Flash Instructions -->
             <div v-if="!flashComplete" class="q-mb-md q-pa-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px;">
-              <div class="text-weight-bold text-tna-accent q-mb-sm">⚠️ IMPORTANT Instructions:</div>
+              <div class="text-weight-bold text-tna-accent q-mb-sm">IMPORTANT Instructions:</div>
               <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height: 1.8;">
                 <li>WHEN FLASH REACHES 100% it will take 30-45 Seconds for FLASH to SAY COMPLETE! <strong class="text-tna-accent">WAIT!! DO NOT REFRESH!</strong></li>
                 <li>AFTER FLASH SAYS COMPLETE SCREEN WILL TAKE 30SEC TO BOOT</li>
@@ -458,7 +492,7 @@
             <div v-if="!flashing && !flashComplete" class="text-center">
               <q-btn
                 color="primary"
-                label="⚡ Start Flashing"
+                label="Start Flashing"
                 @click="startFlashing"
                 :disable="!paid || !flashToken"
                 size="lg"
@@ -485,7 +519,7 @@
               <div class="status-connected" style="font-size: 3em;">✓</div>
               <div class="text-h6 status-connected q-mt-sm">Flash Complete!</div>
               <p class="text-tna-muted q-mt-sm">Your device has been flashed successfully.</p>
-              <q-btn flat label="🔄 Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
+              <q-btn flat label="Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
             </div>
           </q-card-section>
         </q-card>
@@ -506,7 +540,7 @@
       <div v-if="bulletins.length > 0" class="col-12 col-lg-3">
         <q-card class="tna-card bulletin-board" style="position: sticky; top: 16px;">
           <q-card-section class="q-pa-sm">
-            <div class="text-subtitle2 text-tna-primary q-mb-xs">📢 News</div>
+            <div class="text-subtitle2 text-tna-primary q-mb-xs">News</div>
             <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item-compact">
               <div class="bulletin-date-small">${ formatBulletinDate(bulletin.created_at) }</div>
               <div class="text-tna-secondary text-caption">${ bulletin.message }</div>
@@ -593,7 +627,6 @@
           keepConfig: true,
 
           // Payment
-          priceSats: 5000,
           invoice: null,
           paymentHash: null,
           expiresAt: null,
@@ -632,11 +665,30 @@
 
         versionOptions() {
           const device = this.devices.find(d => d.id === this.selectedDevice)
-          if (!device) return []
-          return device.versions.map(v => ({
-            label: v,
-            value: v
+          if (!device || !device.firmware) return []
+          return device.firmware.map(fw => ({
+            label: `${fw.version} - ${this.formatSats(fw.price_sats)} sats`,
+            value: fw.version
           }))
+        },
+
+        selectedFirmware() {
+          if (!this.selectedDevice || !this.selectedVersion) return null
+          const device = this.devices.find(d => d.id === this.selectedDevice)
+          if (!device || !device.firmware) return null
+          return device.firmware.find(fw => fw.version === this.selectedVersion)
+        },
+
+        selectedFirmwarePrice() {
+          return this.selectedFirmware ? this.selectedFirmware.price_sats : 0
+        },
+
+        selectedFirmwareNotes() {
+          return this.selectedFirmware ? this.selectedFirmware.notes : null
+        },
+
+        selectedFirmwareDiscountEnabled() {
+          return this.selectedFirmware ? this.selectedFirmware.discount_enabled : false
         },
 
         qrCodeUrl() {
@@ -645,9 +697,9 @@
         },
 
         discountedPrice() {
-          if (!this.promoApplied || this.promoDiscount === 0) return this.priceSats
-          const discount = Math.floor(this.priceSats * this.promoDiscount / 100)
-          return Math.max(0, this.priceSats - discount)
+          if (!this.promoApplied || this.promoDiscount === 0) return this.selectedFirmwarePrice
+          const discount = Math.floor(this.selectedFirmwarePrice * this.promoDiscount / 100)
+          return Math.max(0, this.selectedFirmwarePrice - discount)
         }
       },
 
@@ -676,12 +728,7 @@
 
         async loadDevices() {
           const response = await api.request('GET', '/tnaflasher/api/v1/devices')
-          this.devices = response.data.devices
-        },
-
-        async loadPrice() {
-          const response = await api.request('GET', '/tnaflasher/api/v1/price')
-          this.priceSats = response.data.price_sats
+          this.devices = response.data.devices || []
         },
 
         async loadBulletins() {
@@ -754,6 +801,11 @@
 
         onDeviceChange() {
           this.selectedVersion = null
+          this.clearPromoCode()
+        },
+
+        onVersionChange() {
+          this.clearPromoCode()
         },
 
         async applyPromoCode() {
@@ -982,7 +1034,6 @@
         // Try to load devices - this validates the extension is working
         try {
           await this.loadDevices()
-          await this.loadPrice()
           await this.loadBulletins()
           this.walletValid = true
         } catch (e) {

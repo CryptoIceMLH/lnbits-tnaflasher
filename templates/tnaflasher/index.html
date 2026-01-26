@@ -39,8 +39,8 @@
   <div class="col-12 col-md-3">
     <q-card>
       <q-card-section class="text-center">
-        <div class="text-h4">${ priceSats }</div>
-        <div class="text-subtitle2">Price (SATS)</div>
+        <div class="text-h4">${ miners.length }</div>
+        <div class="text-subtitle2">Miners</div>
       </q-card-section>
     </q-card>
   </div>
@@ -52,22 +52,6 @@
         <div class="text-h6 q-mb-md">Configuration</div>
 
         <div class="row q-col-gutter-md">
-          <div class="col-12">
-            <q-input
-              v-model.number="priceSats"
-              type="number"
-              label="Flash Price (SATS)"
-              outlined
-              dense
-            >
-              <template v-slot:append>
-                <q-btn flat dense icon="save" @click="savePrice" :loading="savingPrice">
-                  <q-tooltip>Save Price</q-tooltip>
-                </q-btn>
-              </template>
-            </q-input>
-          </div>
-
           <div class="col-12">
             <q-select
               v-model="selectedWallet"
@@ -275,54 +259,165 @@
     </q-card>
   </div>
 
-  <!-- Firmware Management -->
+  <!-- Miner Management -->
   <div class="col-12 col-md-6">
+    <q-card>
+      <q-card-section>
+        <div class="row items-center q-mb-md">
+          <div class="text-h6">Miner Types</div>
+          <q-space></q-space>
+          <q-btn flat icon="refresh" @click="loadMiners" :loading="loadingMiners">
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
+        </div>
+
+        <!-- Add new miner -->
+        <div class="row q-col-gutter-sm q-mb-md">
+          <div class="col">
+            <q-input
+              v-model="newMinerName"
+              label="Miner Name"
+              outlined
+              dense
+              placeholder="e.g. Bitaxe, NerdQAxe++"
+            />
+          </div>
+          <div class="col-auto">
+            <q-btn
+              color="primary"
+              icon="add"
+              @click="addMiner"
+              :loading="addingMiner"
+              :disable="!newMinerName"
+            >
+              <q-tooltip>Add Miner</q-tooltip>
+            </q-btn>
+          </div>
+        </div>
+
+        <!-- Existing miners -->
+        <q-list v-if="miners.length > 0" bordered separator>
+          <q-item v-for="miner in miners" :key="miner.id">
+            <q-item-section avatar>
+              <q-icon name="memory" color="orange" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label class="text-weight-bold">${ miner.name }</q-item-label>
+              <q-item-label caption>ID: ${ miner.id.substring(0, 8) }...</q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-btn flat dense icon="delete" color="negative" @click="deleteMiner(miner)">
+                <q-tooltip>Delete Miner</q-tooltip>
+              </q-btn>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <div v-else class="text-grey text-center q-pa-md">
+          No miners yet. Add one above to start uploading firmware.
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <!-- Firmware Management -->
+  <div class="col-12">
     <q-card>
       <q-card-section>
         <div class="row items-center q-mb-md">
           <div class="text-h6">Firmware Management</div>
           <q-space></q-space>
-          <q-btn flat icon="refresh" @click="loadDevices" :loading="loadingDevices">
+          <q-btn flat icon="refresh" @click="loadMiners" :loading="loadingMiners">
             <q-tooltip>Refresh</q-tooltip>
           </q-btn>
         </div>
 
-        <q-list bordered separator>
-          <q-expansion-item v-for="device in devices" :key="device.id" :label="device.name" header-class="text-weight-medium">
+        <div v-if="miners.length === 0" class="text-grey text-center q-pa-md">
+          Add a miner first to upload firmware.
+        </div>
+
+        <q-list v-else bordered separator>
+          <q-expansion-item
+            v-for="miner in miners"
+            :key="miner.id"
+            :label="miner.name"
+            header-class="text-weight-medium"
+            expand-icon-class="text-orange"
+          >
             <q-card>
               <q-card-section>
-                <!-- Existing versions -->
-                <div v-if="device.versions.length > 0" class="q-mb-md">
-                  <div class="text-caption text-grey q-mb-sm">Installed versions:</div>
-                  <q-chip
-                    v-for="version in device.versions"
-                    :key="version"
-                    removable
-                    @remove="deleteFirmware(device.id, version)"
-                    color="primary"
-                    text-color="white"
-                    size="sm"
-                  >
-                    ${ version }
-                  </q-chip>
+                <!-- Existing firmware -->
+                <div v-if="minerFirmware[miner.id] && minerFirmware[miner.id].length > 0" class="q-mb-md">
+                  <div class="text-caption text-grey q-mb-sm">Uploaded firmware:</div>
+                  <q-list bordered separator>
+                    <q-item v-for="fw in minerFirmware[miner.id]" :key="fw.id">
+                      <q-item-section avatar>
+                        <q-icon name="description" color="primary" />
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label>
+                          <span class="text-weight-bold">${ fw.version }</span>
+                          <q-badge color="orange" class="q-ml-sm">${ formatSats(fw.price_sats) } sats</q-badge>
+                          <q-badge v-if="fw.discount_enabled" color="positive" class="q-ml-xs">Discount OK</q-badge>
+                          <q-badge v-else color="grey" class="q-ml-xs">No Discount</q-badge>
+                        </q-item-label>
+                        <q-item-label caption v-if="fw.notes">${ fw.notes }</q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <div class="row q-gutter-xs">
+                          <q-btn flat dense icon="edit" color="primary" @click="editFirmware(fw)">
+                            <q-tooltip>Edit</q-tooltip>
+                          </q-btn>
+                          <q-btn flat dense icon="delete" color="negative" @click="deleteFirmwareItem(fw)">
+                            <q-tooltip>Delete</q-tooltip>
+                          </q-btn>
+                        </div>
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
                 </div>
-                <div v-else class="text-grey q-mb-md">No firmware uploaded</div>
+                <div v-else class="text-grey q-mb-md">No firmware uploaded for this miner</div>
 
-                <!-- Upload new version -->
-                <div class="row q-col-gutter-sm items-center">
-                  <div class="col-auto">
+                <!-- Upload new firmware -->
+                <div class="text-caption text-grey q-mb-sm">Upload new firmware:</div>
+                <div class="row q-col-gutter-sm items-end">
+                  <div class="col-12 col-sm-2">
                     <q-input
-                      v-model="uploadVersion[device.id]"
+                      v-model="uploadData[miner.id].version"
                       label="Version"
                       placeholder="v3.42"
                       outlined
                       dense
-                      style="width: 100px"
                     />
                   </div>
-                  <div class="col">
+                  <div class="col-12 col-sm-2">
+                    <q-input
+                      v-model.number="uploadData[miner.id].price_sats"
+                      type="number"
+                      label="Price (sats)"
+                      outlined
+                      dense
+                      min="0"
+                    />
+                  </div>
+                  <div class="col-12 col-sm-3">
+                    <q-input
+                      v-model="uploadData[miner.id].notes"
+                      label="Notes (optional)"
+                      placeholder="e.g. Stable release"
+                      outlined
+                      dense
+                    />
+                  </div>
+                  <div class="col-auto">
+                    <q-checkbox
+                      v-model="uploadData[miner.id].discount_enabled"
+                      label="Allow Discount"
+                      dense
+                    />
+                  </div>
+                  <div class="col-12 col-sm-3">
                     <q-file
-                      v-model="uploadFile[device.id]"
+                      v-model="uploadData[miner.id].file"
                       label="Select .bin file"
                       outlined
                       dense
@@ -337,9 +432,9 @@
                     <q-btn
                       color="primary"
                       icon="upload"
-                      @click="uploadFirmware(device.id)"
-                      :loading="uploading[device.id]"
-                      :disable="!uploadVersion[device.id] || !uploadFile[device.id]"
+                      @click="uploadFirmware(miner.id)"
+                      :loading="uploading[miner.id]"
+                      :disable="!uploadData[miner.id].version || !uploadData[miner.id].file || uploadData[miner.id].price_sats === null"
                     >
                       <q-tooltip>Upload</q-tooltip>
                     </q-btn>
@@ -399,6 +494,43 @@
     </q-card>
   </div>
 </div>
+
+<!-- Edit Firmware Dialog -->
+<q-dialog v-model="editFirmwareDialog" persistent>
+  <q-card style="min-width: 400px">
+    <q-card-section>
+      <div class="text-h6">Edit Firmware</div>
+    </q-card-section>
+
+    <q-card-section class="q-pt-none">
+      <q-input
+        v-model.number="editFirmwareData.price_sats"
+        type="number"
+        label="Price (sats)"
+        outlined
+        dense
+        min="0"
+        class="q-mb-md"
+      />
+      <q-input
+        v-model="editFirmwareData.notes"
+        label="Notes"
+        outlined
+        dense
+        class="q-mb-md"
+      />
+      <q-checkbox
+        v-model="editFirmwareData.discount_enabled"
+        label="Allow Discount Codes"
+      />
+    </q-card-section>
+
+    <q-card-actions align="right">
+      <q-btn flat label="Cancel" color="grey" v-close-popup />
+      <q-btn flat label="Save" color="primary" @click="saveFirmwareEdit" :loading="savingFirmware" />
+    </q-card-actions>
+  </q-card>
+</q-dialog>
 {% endblock %}
 
 {% block scripts %}
@@ -417,18 +549,28 @@
           today_flashes: 0,
           pending_count: 0
         },
-        priceSats: 5000,
-        savingPrice: false,
         selectedWallet: null,
         walletOptions: [],
-        devices: [],
-        loadingDevices: false,
         requests: [],
         loadingRequests: false,
-        // Firmware upload
-        uploadVersion: {},
-        uploadFile: {},
+        // Miners
+        miners: [],
+        loadingMiners: false,
+        newMinerName: '',
+        addingMiner: false,
+        // Firmware per miner
+        minerFirmware: {},
+        uploadData: {},
         uploading: {},
+        // Edit firmware dialog
+        editFirmwareDialog: false,
+        editFirmwareData: {
+          id: null,
+          price_sats: 0,
+          notes: '',
+          discount_enabled: true
+        },
+        savingFirmware: false,
         // Bulletins
         bulletins: [],
         loadingBulletins: false,
@@ -478,6 +620,18 @@
         }
       },
 
+      initUploadData(minerId) {
+        if (!this.uploadData[minerId]) {
+          this.uploadData[minerId] = {
+            version: '',
+            price_sats: 5000,
+            notes: '',
+            discount_enabled: true,
+            file: null
+          }
+        }
+      },
+
       async loadStats() {
         try {
           const response = await LNbits.api.request(
@@ -489,34 +643,6 @@
         } catch (e) {
           console.error('Failed to load stats:', e)
         }
-      },
-
-      async loadPrice() {
-        try {
-          const response = await LNbits.api.request(
-            'GET',
-            '/tnaflasher/api/v1/admin/price',
-            this.g.user.wallets[0].adminkey
-          )
-          this.priceSats = response.data.price_sats
-        } catch (e) {
-          console.error('Failed to load price:', e)
-        }
-      },
-
-      async savePrice() {
-        this.savingPrice = true
-        try {
-          await LNbits.api.request(
-            'POST',
-            `/tnaflasher/api/v1/admin/price?price_sats=${this.priceSats}`,
-            this.g.user.wallets[0].adminkey
-          )
-          this.$q.notify({ type: 'positive', message: 'Price saved!' })
-        } catch (e) {
-          LNbits.utils.notifyApiError(e)
-        }
-        this.savingPrice = false
       },
 
       async loadWallet() {
@@ -545,15 +671,188 @@
         }
       },
 
-      async loadDevices() {
-        this.loadingDevices = true
+      async loadMiners() {
+        this.loadingMiners = true
         try {
-          const response = await LNbits.api.request('GET', '/tnaflasher/api/v1/devices')
-          this.devices = response.data.devices
+          const response = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/miners',
+            this.g.user.wallets[0].adminkey
+          )
+          this.miners = response.data.miners || []
+
+          // Initialize upload data and load firmware for each miner
+          for (const miner of this.miners) {
+            this.initUploadData(miner.id)
+            await this.loadMinerFirmware(miner.id)
+          }
         } catch (e) {
-          console.error('Failed to load devices:', e)
+          console.error('Failed to load miners:', e)
         }
-        this.loadingDevices = false
+        this.loadingMiners = false
+      },
+
+      async loadMinerFirmware(minerId) {
+        try {
+          const response = await LNbits.api.request(
+            'GET',
+            `/tnaflasher/api/v1/admin/firmware/${minerId}`,
+            this.g.user.wallets[0].adminkey
+          )
+          this.minerFirmware[minerId] = response.data.firmware || []
+        } catch (e) {
+          console.error('Failed to load firmware:', e)
+          this.minerFirmware[minerId] = []
+        }
+      },
+
+      async addMiner() {
+        if (!this.newMinerName) return
+        this.addingMiner = true
+        try {
+          await LNbits.api.request(
+            'POST',
+            '/tnaflasher/api/v1/admin/miners',
+            this.g.user.wallets[0].adminkey,
+            { name: this.newMinerName }
+          )
+          this.$q.notify({ type: 'positive', message: 'Miner added!' })
+          this.newMinerName = ''
+          await this.loadMiners()
+        } catch (e) {
+          LNbits.utils.notifyApiError(e)
+        }
+        this.addingMiner = false
+      },
+
+      async deleteMiner(miner) {
+        this.$q.dialog({
+          title: 'Delete Miner',
+          message: `Are you sure you want to delete "${miner.name}" and ALL its firmware?`,
+          cancel: true,
+          persistent: true
+        }).onOk(async () => {
+          try {
+            await LNbits.api.request(
+              'DELETE',
+              `/tnaflasher/api/v1/admin/miners/${miner.id}`,
+              this.g.user.wallets[0].adminkey
+            )
+            this.$q.notify({ type: 'positive', message: 'Miner deleted!' })
+            await this.loadMiners()
+          } catch (e) {
+            LNbits.utils.notifyApiError(e)
+          }
+        })
+      },
+
+      async uploadFirmware(minerId) {
+        const data = this.uploadData[minerId]
+
+        if (!data.version || !data.file || data.price_sats === null) {
+          this.$q.notify({ type: 'warning', message: 'Please fill in version, price, and select a file' })
+          return
+        }
+
+        this.uploading[minerId] = true
+        try {
+          const formData = new FormData()
+          formData.append('file', data.file)
+
+          const params = new URLSearchParams({
+            miner_id: minerId,
+            version: data.version,
+            price_sats: data.price_sats,
+            discount_enabled: data.discount_enabled
+          })
+          if (data.notes) {
+            params.append('notes', data.notes)
+          }
+
+          await fetch(
+            `/tnaflasher/api/v1/admin/firmware/upload?${params.toString()}`,
+            {
+              method: 'POST',
+              headers: {
+                'X-Api-Key': this.g.user.wallets[0].adminkey
+              },
+              body: formData
+            }
+          )
+
+          this.$q.notify({ type: 'positive', message: `Firmware ${data.version} uploaded!` })
+
+          // Reset form
+          this.uploadData[minerId] = {
+            version: '',
+            price_sats: 5000,
+            notes: '',
+            discount_enabled: true,
+            file: null
+          }
+
+          await this.loadMinerFirmware(minerId)
+        } catch (e) {
+          console.error('Upload failed:', e)
+          this.$q.notify({ type: 'negative', message: 'Upload failed' })
+        }
+        this.uploading[minerId] = false
+      },
+
+      editFirmware(fw) {
+        this.editFirmwareData = {
+          id: fw.id,
+          price_sats: fw.price_sats,
+          notes: fw.notes || '',
+          discount_enabled: fw.discount_enabled
+        }
+        this.editFirmwareDialog = true
+      },
+
+      async saveFirmwareEdit() {
+        this.savingFirmware = true
+        try {
+          const params = new URLSearchParams({
+            price_sats: this.editFirmwareData.price_sats,
+            discount_enabled: this.editFirmwareData.discount_enabled
+          })
+          if (this.editFirmwareData.notes !== null) {
+            params.append('notes', this.editFirmwareData.notes)
+          }
+
+          await LNbits.api.request(
+            'PUT',
+            `/tnaflasher/api/v1/admin/firmware/${this.editFirmwareData.id}?${params.toString()}`,
+            this.g.user.wallets[0].adminkey
+          )
+          this.$q.notify({ type: 'positive', message: 'Firmware updated!' })
+          this.editFirmwareDialog = false
+          await this.loadMiners()
+        } catch (e) {
+          LNbits.utils.notifyApiError(e)
+        }
+        this.savingFirmware = false
+      },
+
+      async deleteFirmwareItem(fw) {
+        this.$q.dialog({
+          title: 'Delete Firmware',
+          message: `Are you sure you want to delete firmware ${fw.version}?`,
+          cancel: true,
+          persistent: true
+        }).onOk(async () => {
+          try {
+            await LNbits.api.request(
+              'DELETE',
+              `/tnaflasher/api/v1/admin/firmware/${fw.id}`,
+              this.g.user.wallets[0].adminkey
+            )
+            this.$q.notify({ type: 'positive', message: 'Firmware deleted!' })
+            await this.loadMiners()
+          } catch (e) {
+            LNbits.utils.notifyApiError(e)
+          }
+        })
       },
 
       async loadRequests() {
@@ -595,68 +894,6 @@
           }
           document.body.removeChild(textArea)
         }
-      },
-
-      async uploadFirmware(deviceId) {
-        const version = this.uploadVersion[deviceId]
-        const file = this.uploadFile[deviceId]
-
-        if (!version || !file) {
-          this.$q.notify({ type: 'warning', message: 'Please enter version and select a file' })
-          return
-        }
-
-        this.uploading[deviceId] = true
-        try {
-          const formData = new FormData()
-          formData.append('file', file)
-
-          await fetch(
-            `/tnaflasher/api/v1/admin/firmware/upload?device=${deviceId}&version=${version}`,
-            {
-              method: 'POST',
-              headers: {
-                'X-Api-Key': this.g.user.wallets[0].adminkey
-              },
-              body: formData
-            }
-          )
-
-          this.$q.notify({ type: 'positive', message: `Firmware ${version} uploaded for ${deviceId}` })
-          this.uploadVersion[deviceId] = ''
-          this.uploadFile[deviceId] = null
-          await this.loadDevices()
-        } catch (e) {
-          console.error('Upload failed:', e)
-          this.$q.notify({ type: 'negative', message: 'Upload failed' })
-        }
-        this.uploading[deviceId] = false
-      },
-
-      async deleteFirmware(deviceId, version) {
-        this.$q.dialog({
-          title: 'Delete Firmware',
-          message: `Are you sure you want to delete ${deviceId} ${version}?`,
-          cancel: true,
-          persistent: true
-        }).onOk(async () => {
-          try {
-            await fetch(
-              `/tnaflasher/api/v1/admin/firmware/${deviceId}/${version}`,
-              {
-                method: 'DELETE',
-                headers: {
-                  'X-Api-Key': this.g.user.wallets[0].adminkey
-                }
-              }
-            )
-            this.$q.notify({ type: 'positive', message: `Firmware ${version} deleted` })
-            await this.loadDevices()
-          } catch (e) {
-            console.error('Delete failed:', e)
-            this.$q.notify({ type: 'negative', message: 'Delete failed' })
-          }
-        })
       },
 
       // Bulletin methods
@@ -815,9 +1052,8 @@
 
       // Load all data
       await this.loadStats()
-      await this.loadPrice()
       await this.loadWallet()
-      await this.loadDevices()
+      await this.loadMiners()
       await this.loadRequests()
       await this.loadBulletins()
       await this.loadPromoCodes()

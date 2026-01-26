@@ -116,3 +116,65 @@ class ValidatePromoResponse(BaseModel):
     valid: bool
     discount_percent: int = 0
     message: str = ""
+
+
+# ============== Miner & Firmware Models ==============
+
+class Miner(BaseModel):
+    """Miner device type"""
+    id: str
+    name: str
+    created_at: Optional[int] = None
+
+
+class CreateMiner(BaseModel):
+    """Data needed to create a miner"""
+    name: str
+
+
+class MinersResponse(BaseModel):
+    """List of miners"""
+    miners: list[Miner]
+
+
+class Firmware(BaseModel):
+    """Firmware version for a miner"""
+    id: str
+    miner_id: str
+    version: str
+    price_sats: int
+    notes: Optional[str] = None
+    discount_enabled: bool = True
+    file_path: str
+    created_at: Optional[int] = None
+
+
+class CreateFirmware(BaseModel):
+    """Data needed to create firmware (used in request body)"""
+    version: str
+    price_sats: int
+    notes: Optional[str] = None
+    discount_enabled: bool = True
+
+
+class UpdateFirmware(BaseModel):
+    """Data for updating firmware"""
+    price_sats: Optional[int] = None
+    notes: Optional[str] = None
+    discount_enabled: Optional[bool] = None
+
+
+class FirmwareInfo(BaseModel):
+    """Firmware info for public display"""
+    id: str
+    version: str
+    price_sats: int
+    notes: Optional[str] = None
+    discount_enabled: bool = True
+
+
+class DeviceWithFirmware(BaseModel):
+    """Device with firmware details for public page"""
+    id: str
+    name: str
+    firmware: list[FirmwareInfo]

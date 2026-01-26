@@ -10,22 +10,16 @@ from lnbits.core.services import create_invoice
 
 from .crud import (
     create_flash_request,
-    get_price,
     get_flash_request,
     validate_promo_code,
     increment_promo_usage,
     mark_flash_paid,
+    get_miners,
+    get_miner,
+    get_firmware_by_miner,
+    get_firmware_by_miner_and_version,
 )
 
-
-# Supported devices with display names
-SUPPORTED_DEVICES = {
-    "NerdQAxePlus": "NerdQAxe+",
-    "NerdQAxePlus2": "NerdQAxe++",
-    "NerdQX": "NerdQX",
-    "NerdOCTAXEPlus": "NerdOCTAXE+",
-    "NerdOCTAXEGamma": "NerdOCTAXE Gamma",
-}
 
 # Token expiry time (5 minutes)
 TOKEN_EXPIRY_SECONDS = 300
@@ -39,39 +33,44 @@ def get_firmware_dir() -> Path:
     return Path(__file__).parent / "static" / "firmware"
 
 
-def get_available_devices() -> list[dict]:
-    """Get list of available devices with their firmware versions"""
+async def get_available_devices() -> list[dict]:
+    """Get list of available devices with their firmware versions from database"""
     devices = []
-    firmware_dir = get_firmware_dir()
+    miners = await get_miners()
 
-    for device_id, device_name in SUPPORTED_DEVICES.items():
-        device_path = firmware_dir / device_id
-        versions = []
+    for miner in miners:
+        firmware_list = await get_firmware_by_miner(miner.id)
 
-        if device_path.exists():
-            for file in device_path.glob("*.bin"):
-                # Extract version from filename (e.g., v3.42.bin -> v3.42)
-                version = file.stem
-                versions.append(version)
-
-        # Sort versions in descending order (newest first)
-        versions.sort(reverse=True)
+        # Build firmware info list with prices and notes
+        firmware_info = []
+        for fw in firmware_list:
+            firmware_info.append({
+                "id": fw.id,
+                "version": fw.version,
+                "price_sats": fw.price_sats,
+                "notes": fw.notes,
+                "discount_enabled": fw.discount_enabled
+            })
 
         devices.append({
-            "id": device_id,
-            "name": device_name,
-            "versions": versions
+            "id": miner.id,
+            "name": miner.name,
+            "firmware": firmware_info,
+            # Keep versions list for backward compatibility
+            "versions": [fw.version for fw in firmware_list]
         })
 
     return devices
 
 
-def get_firmware_path(device: str, version: str) -> Optional[Path]:
+async def get_firmware_path(miner_id: str, version: str) -> Optional[Path]:
     """Get the path to a firmware file"""
-    if device not in SUPPORTED_DEVICES:
+    firmware = await get_firmware_by_miner_and_version(miner_id, version)
+
+    if not firmware:
         return None
 
-    firmware_path = get_firmware_dir() / device / f"{version}.bin"
+    firmware_path = Path(firmware.file_path)
 
     if firmware_path.exists():
         return firmware_path
@@ -86,22 +85,32 @@ async def create_flash_invoice(
     promo_code: Optional[str] = None
 ) -> dict:
     """Create a Lightning invoice for a flash request"""
-    # Validate device
-    if device not in SUPPORTED_DEVICES:
+    # Get miner from database
+    miner = await get_miner(device)
+    if not miner:
         raise ValueError(f"Unknown device: {device}")
 
-    # Check firmware exists
-    firmware_path = get_firmware_path(device, version)
-    if not firmware_path:
+    # Get firmware for this miner and version
+    firmware = await get_firmware_by_miner_and_version(device, version)
+    if not firmware:
         raise ValueError(f"Firmware not found: {device} {version}")
 
-    # Get base price
-    base_price = await get_price()
+    # Check firmware file exists
+    firmware_path = Path(firmware.file_path)
+    if not firmware_path.exists():
+        raise ValueError(f"Firmware file not found: {device} {version}")
+
+    # Get price from firmware (per-firmware pricing)
+    base_price = firmware.price_sats
     final_price = base_price
     discount_percent = 0
 
     # Apply promo code if provided
     if promo_code:
+        # Check if discount is enabled for this firmware
+        if not firmware.discount_enabled:
+            raise ValueError("Discounts are not available for this firmware")
+
         is_valid, discount_percent, message = await validate_promo_code(promo_code)
         if not is_valid:
             raise ValueError(message)
@@ -142,7 +151,7 @@ async def create_flash_invoice(
     payment = await create_invoice(
         wallet_id=wallet_id,
         amount=final_price,
-        memo=f"TNA Flash: {SUPPORTED_DEVICES[device]} {version}" + (f" ({discount_percent}% off)" if discount_percent > 0 else ""),
+        memo=f"TNA Flash: {miner.name} {version}" + (f" ({discount_percent}% off)" if discount_percent > 0 else ""),
         extra={
             "tag": "tnaflasher",
             "device": device,

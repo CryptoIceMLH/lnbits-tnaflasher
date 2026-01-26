@@ -16,6 +16,9 @@ from .models import (
     CreatePromoCode,
     PromoCodesResponse,
     ValidatePromoResponse,
+    CreateMiner,
+    MinersResponse,
+    UpdateFirmware,
 )
 from .crud import (
     get_all_flash_requests,
@@ -35,6 +38,16 @@ from .crud import (
     validate_promo_code,
     update_promo_code,
     delete_promo_code,
+    create_miner,
+    get_miners,
+    get_miner,
+    delete_miner,
+    create_firmware,
+    get_firmware_by_miner,
+    get_firmware,
+    get_firmware_by_miner_and_version,
+    update_firmware,
+    delete_firmware,
 )
 from .services import (
     get_available_devices,
@@ -43,7 +56,6 @@ from .services import (
     get_firmware_path,
     get_firmware_dir,
     verify_flash_token,
-    SUPPORTED_DEVICES,
 )
 
 tnaflasher_api_router = APIRouter(prefix="/api/v1")
@@ -58,15 +70,15 @@ async def api_health():
 
 
 @tnaflasher_api_router.get("/devices")
-async def api_get_devices() -> DevicesResponse:
+async def api_get_devices():
     """Get list of available devices and firmware versions"""
-    devices = get_available_devices()
-    return DevicesResponse(devices=devices)
+    devices = await get_available_devices()
+    return {"devices": devices}
 
 
 @tnaflasher_api_router.get("/price")
 async def api_get_price() -> PriceResponse:
-    """Get the current flash price"""
+    """Get the current flash price (legacy - now prices are per-firmware)"""
     price = await get_price()
     return PriceResponse(price_sats=price)
 
@@ -121,7 +133,7 @@ async def api_download_firmware(
         raise HTTPException(status_code=401, detail="Token does not match request")
 
     # Get firmware path
-    firmware_path = get_firmware_path(device, version)
+    firmware_path = await get_firmware_path(device, version)
     if not firmware_path:
         raise HTTPException(status_code=404, detail="Firmware not found")
 
@@ -163,7 +175,7 @@ async def api_admin_get_stats(user: User = Depends(check_admin)) -> StatsRespons
 
 @tnaflasher_api_router.get("/admin/price")
 async def api_admin_get_price(user: User = Depends(check_admin)) -> PriceResponse:
-    """Get current price (admin only)"""
+    """Get current price (admin only) - legacy, now prices are per-firmware"""
     price = await get_price()
     return PriceResponse(price_sats=price)
 
@@ -173,7 +185,7 @@ async def api_admin_set_price(
     price_sats: int = Query(..., ge=1),
     user: User = Depends(check_admin)
 ):
-    """Set the flash price (admin only)"""
+    """Set the flash price (admin only) - legacy, now prices are per-firmware"""
     await set_price(price_sats)
     return {"success": True, "price_sats": price_sats}
 
@@ -195,60 +207,165 @@ async def api_admin_set_wallet(
     return {"success": True, "wallet_id": wallet_id}
 
 
+# ============== Miner Management Endpoints ==============
+
+@tnaflasher_api_router.get("/admin/miners")
+async def api_admin_get_miners(user: User = Depends(check_admin)) -> MinersResponse:
+    """Get all miners (admin only)"""
+    miners = await get_miners()
+    return MinersResponse(miners=miners)
+
+
+@tnaflasher_api_router.post("/admin/miners")
+async def api_admin_create_miner(
+    data: CreateMiner,
+    user: User = Depends(check_admin)
+):
+    """Create a new miner (admin only)"""
+    if not data.name or len(data.name.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Miner name is required")
+
+    miner = await create_miner(data.name.strip())
+    return miner.dict()
+
+
+@tnaflasher_api_router.delete("/admin/miners/{miner_id}")
+async def api_admin_delete_miner(
+    miner_id: str,
+    user: User = Depends(check_admin)
+):
+    """Delete a miner and all its firmware (admin only)"""
+    miner = await get_miner(miner_id)
+    if not miner:
+        raise HTTPException(status_code=404, detail="Miner not found")
+
+    # Get firmware for this miner to delete files
+    firmware_list = await get_firmware_by_miner(miner_id)
+    for fw in firmware_list:
+        try:
+            file_path = Path(fw.file_path)
+            if file_path.exists():
+                file_path.unlink()
+        except Exception:
+            pass  # Ignore file deletion errors
+
+    await delete_miner(miner_id)
+    return {"success": True}
+
+
+# ============== Firmware Management Endpoints ==============
+
+@tnaflasher_api_router.get("/admin/firmware/{miner_id}")
+async def api_admin_get_firmware(
+    miner_id: str,
+    user: User = Depends(check_admin)
+):
+    """Get all firmware for a miner (admin only)"""
+    miner = await get_miner(miner_id)
+    if not miner:
+        raise HTTPException(status_code=404, detail="Miner not found")
+
+    firmware_list = await get_firmware_by_miner(miner_id)
+    return {"firmware": [fw.dict() for fw in firmware_list]}
+
+
 @tnaflasher_api_router.post("/admin/firmware/upload")
 async def api_admin_upload_firmware(
-    device: str = Query(...),
+    miner_id: str = Query(...),
     version: str = Query(...),
+    price_sats: int = Query(..., ge=0),
+    notes: str = Query(None),
+    discount_enabled: bool = Query(True),
     file: UploadFile = File(...),
     user: User = Depends(check_admin)
 ):
     """Upload a firmware file (admin only)"""
-    # Validate device
-    if device not in SUPPORTED_DEVICES:
-        raise HTTPException(status_code=400, detail=f"Unknown device: {device}")
+    # Validate miner exists
+    miner = await get_miner(miner_id)
+    if not miner:
+        raise HTTPException(status_code=400, detail=f"Unknown miner: {miner_id}")
+
+    # Check if firmware version already exists for this miner
+    existing = await get_firmware_by_miner_and_version(miner_id, version)
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Firmware version {version} already exists for this miner")
 
     # Validate file extension
     if not file.filename.endswith(".bin"):
         raise HTTPException(status_code=400, detail="File must be a .bin file")
 
-    # Create device directory if needed
+    # Create miner directory if needed
     firmware_dir = get_firmware_dir()
-    device_dir = firmware_dir / device
-    device_dir.mkdir(parents=True, exist_ok=True)
+    miner_dir = firmware_dir / miner_id
+    miner_dir.mkdir(parents=True, exist_ok=True)
 
     # Save the file
-    file_path = device_dir / f"{version}.bin"
+    file_path = miner_dir / f"{version}.bin"
     content = await file.read()
     file_path.write_bytes(content)
 
+    # Create firmware record in database
+    firmware = await create_firmware(
+        miner_id=miner_id,
+        version=version,
+        price_sats=price_sats,
+        file_path=str(file_path),
+        notes=notes,
+        discount_enabled=discount_enabled
+    )
+
     return {
         "success": True,
-        "device": device,
-        "version": version,
+        "firmware": firmware.dict(),
         "size": len(content)
     }
 
 
-@tnaflasher_api_router.delete("/admin/firmware/{device}/{version}")
+@tnaflasher_api_router.put("/admin/firmware/{firmware_id}")
+async def api_admin_update_firmware(
+    firmware_id: str,
+    price_sats: int = Query(None, ge=0),
+    notes: str = Query(None),
+    discount_enabled: bool = Query(None),
+    user: User = Depends(check_admin)
+):
+    """Update firmware details (admin only)"""
+    firmware = await get_firmware(firmware_id)
+    if not firmware:
+        raise HTTPException(status_code=404, detail="Firmware not found")
+
+    updated = await update_firmware(
+        firmware_id=firmware_id,
+        price_sats=price_sats,
+        notes=notes,
+        discount_enabled=discount_enabled
+    )
+
+    return {"success": True, "firmware": updated.dict()}
+
+
+@tnaflasher_api_router.delete("/admin/firmware/{firmware_id}")
 async def api_admin_delete_firmware(
-    device: str,
-    version: str,
+    firmware_id: str,
     user: User = Depends(check_admin)
 ):
     """Delete a firmware file (admin only)"""
-    # Validate device
-    if device not in SUPPORTED_DEVICES:
-        raise HTTPException(status_code=400, detail=f"Unknown device: {device}")
-
-    # Get firmware path
-    firmware_path = get_firmware_path(device, version)
-    if not firmware_path:
+    firmware = await get_firmware(firmware_id)
+    if not firmware:
         raise HTTPException(status_code=404, detail="Firmware not found")
 
     # Delete the file
-    firmware_path.unlink()
+    try:
+        file_path = Path(firmware.file_path)
+        if file_path.exists():
+            file_path.unlink()
+    except Exception:
+        pass  # Ignore file deletion errors
 
-    return {"success": True, "device": device, "version": version}
+    # Delete from database
+    await delete_firmware(firmware_id)
+
+    return {"success": True}
 
 
 # ============== Bulletin Endpoints ==============
