@@ -94,7 +94,7 @@ async def m006_create_firmware(db):
         """
         CREATE TABLE tnaflasher.firmware (
             id TEXT PRIMARY KEY,
-            miner_id TEXT NOT NULL REFERENCES tnaflasher.miners(id) ON DELETE CASCADE,
+            miner_id TEXT NOT NULL,
             version TEXT NOT NULL,
             price_sats INTEGER NOT NULL,
             notes TEXT,
