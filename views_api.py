@@ -243,7 +243,8 @@ async def api_admin_delete_miner(
     firmware_list = await get_firmware_by_miner(miner_id)
     for fw in firmware_list:
         try:
-            file_path = Path(fw.file_path)
+            stored = fw.file_path
+            file_path = Path(stored) if Path(stored).is_absolute() else get_firmware_dir() / stored
             if file_path.exists():
                 file_path.unlink()
         except Exception:
@@ -304,12 +305,12 @@ async def api_admin_upload_firmware(
     content = await file.read()
     file_path.write_bytes(content)
 
-    # Create firmware record in database
+    # Create firmware record in database (store relative path)
     firmware = await create_firmware(
         miner_id=miner_id,
         version=version,
         price_sats=price_sats,
-        file_path=str(file_path),
+        file_path=f"{miner_id}/{version}.bin",
         notes=notes,
         discount_enabled=discount_enabled
     )
@@ -356,7 +357,8 @@ async def api_admin_delete_firmware(
 
     # Delete the file
     try:
-        file_path = Path(firmware.file_path)
+        stored = firmware.file_path
+        file_path = Path(stored) if Path(stored).is_absolute() else get_firmware_dir() / stored
         if file_path.exists():
             file_path.unlink()
     except Exception:

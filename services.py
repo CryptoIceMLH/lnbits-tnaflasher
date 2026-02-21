@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from lnbits.core.services import create_invoice
+from lnbits.settings import settings
 
 from .crud import (
     create_flash_request,
@@ -29,8 +30,10 @@ TOKEN_SECRET = os.environ.get("TNAFLASHER_SECRET", "change-this-secret-in-produc
 
 
 def get_firmware_dir() -> Path:
-    """Get the firmware directory path"""
-    return Path(__file__).parent / "static" / "firmware"
+    """Get the firmware directory path (persistent data volume)"""
+    firmware_dir = Path(settings.lnbits_data_folder) / "tnaflasher" / "firmware"
+    firmware_dir.mkdir(parents=True, exist_ok=True)
+    return firmware_dir
 
 
 async def get_available_devices() -> list[dict]:
@@ -70,7 +73,9 @@ async def get_firmware_path(miner_id: str, version: str) -> Optional[Path]:
     if not firmware:
         return None
 
-    firmware_path = Path(firmware.file_path)
+    # Support both legacy absolute paths and new relative paths
+    stored = firmware.file_path
+    firmware_path = Path(stored) if Path(stored).is_absolute() else get_firmware_dir() / stored
 
     if firmware_path.exists():
         return firmware_path
@@ -96,7 +101,8 @@ async def create_flash_invoice(
         raise ValueError(f"Firmware not found: {device} {version}")
 
     # Check firmware file exists
-    firmware_path = Path(firmware.file_path)
+    stored = firmware.file_path
+    firmware_path = Path(stored) if Path(stored).is_absolute() else get_firmware_dir() / stored
     if not firmware_path.exists():
         raise ValueError(f"Firmware file not found: {device} {version}")
 
