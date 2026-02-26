@@ -1055,12 +1055,6 @@
                         <div class="terminal">{{ detectionOutput || '(No output yet)' }}</div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div v-if="!isConnected" style="text-align: center; padding: 40px; color: #666;">
-            <i class="fas fa-plug" style="font-size: 48px; margin-bottom: 15px; opacity: 0.3;"></i>
-            <p style="font-size: 16px;">Connect a device via USB to begin</p>
             <!-- Flash Tools Tab -->
             <div class="tab-content" :class="{ active: activeTab === 'flash-tools' }">
                 <div class="tab-section">
@@ -1197,6 +1191,11 @@
             </div>
         </div>
 
+        <div v-if="!isConnected" style="text-align: center; padding: 40px; color: #666;">
+            <i class="fas fa-plug" style="font-size: 48px; margin-bottom: 15px; opacity: 0.3;"></i>
+            <p style="font-size: 16px;">Connect a device via USB to begin</p>
+        </div>
+
         <div class="footer">
             <p><a href="javascript:history.back()">← Back to Flasher</a></p>
             <p style="margin-top: 10px; font-size: 11px; color: #555;">TNA Advanced Control Center v2.0 | Powered by tasmota-webserial-esptool</p>
@@ -1330,35 +1329,38 @@
                 },
                 async connectDevice() {
                     try {
-                        // Dynamic import on click — correct web bundle, no 404s
-                        const { connect } = await import('https://cdn.jsdelivr.net/npm/tasmota-webserial-esptool@9.2.20/dist/web/index.js');
+                        // Import tasmota-webserial-esptool
+                        const { ESPLoader } = await import('https://cdn.jsdelivr.net/npm/tasmota-webserial-esptool@9.2.20/dist/web/index.js');
 
-                        // Must pass real logger object (null crashes internally)
                         const logger = {
                             log:   (...a) => console.log(...a),
                             debug: (...a) => console.debug(...a),
                             error: (...a) => console.error(...a),
                         };
 
-                        // connect() calls navigator.serial.requestPort() internally
-                        this.loader = await connect(logger);
+                        // Request port with supported USB vendor IDs (Espressif, CH340, CP210x, FTDI)
+                        const port = await navigator.serial.requestPort({ filters: [
+                            { usbVendorId: 0x303a }, { usbVendorId: 0x1a86 },
+                            { usbVendorId: 0x10c4 }, { usbVendorId: 0x0403 },
+                        ]});
+                        await port.open({ baudRate: 115200 });
 
-                        // initialize() syncs with ROM, detectChip() populates chipName
+                        // Create loader directly (ESPConnect pattern)
+                        this.loader = new ESPLoader(port, logger);
                         await this.loader.initialize();
-                        await this.loader.detectChip();
 
-                        // Load optional parsers (non-blocking)
-                        const nvsModule = await import('https://cdn.jsdelivr.net/npm/nvs-parser@1.0.0/dist/index.esm.js').catch(() => null);
-                        const spiffsModule = await import('https://cdn.jsdelivr.net/npm/spiffs-parser@1.0.0/dist/index.esm.js').catch(() => null);
-                        window.NVSParser = nvsModule?.NVSParser || null;
-                        window.SPIFFSParser = spiffsModule?.SPIFFSParser || null;
+                        // CRITICAL: upload stub firmware — required before any flash reads
+                        // runStub() returns a NEW loader — must reassign
+                        this.loader = await this.loader.runStub();
 
                         const chipName = this.loader.chipName || 'Unknown';
+                        const flashSize = this.loader.flashSize || 'Unknown';
 
                         this.isConnected = true;
                         this.activeTab = 'device-info';
-                        this.deviceInfo.chipName = chipName || 'Unknown';
-                        this.deviceInfo.baudRate = parseInt(this.baudRate).toLocaleString() + ' bps';
+                        this.deviceInfo.chipName = chipName;
+                        this.deviceInfo.flashSize = flashSize;
+                        this.deviceInfo.baudRate = '115,200 bps';
 
                         // --- ESP32-S3 register constants ---
                         const EFUSE_BASE      = 0x60007000;
@@ -1540,42 +1542,48 @@
                 },
                 async readPartitions() {
                     try {
-                        // Read partition table from 0x8000
-                        const partTableData = await this.loader.readFlash(0x8000, 0x1000);
-                        const partitions = this.parsePartitionTable(new Uint8Array(partTableData));
-                        this.partitions = partitions;
+                        // Probe multiple offsets for partition table (ESPConnect pattern)
+                        const PROBE_OFFSETS = [0x8000, 0x9000, 0xa000, 0xc000, 0xd000, 0xe000, 0x10000];
+                        let tableData = null;
+                        for (const off of PROBE_OFFSETS) {
+                            const probe = await this.loader.readFlash(off, 32);
+                            const magic = new DataView(probe.buffer).getUint16(0, true);
+                            if (magic === 0x50aa) {
+                                tableData = await this.loader.readFlash(off, 0x400);
+                                break;
+                            }
+                        }
+                        if (!tableData) { this.partitions = []; return; }
+                        this.partitions = this.parsePartitionTable(new Uint8Array(tableData));
                     } catch (err) {
                         console.error('Failed to read partitions:', err);
                         this.partitions = [];
                     }
                 },
                 parsePartitionTable(data) {
-                    const partitions = [];
-                    const view = new DataView(data.buffer);
+                    const parts = [], view = new DataView(data.buffer), dec = new TextDecoder();
+                    const typeNames = {0:'app', 1:'data'};
+                    const dataSubNames = {0:'otadata',1:'phy',2:'nvs',3:'coredump',4:'nvs_keys',5:'efuse_em',0x82:'fat',0x83:'spiffs',0x84:'littlefs'};
+                    const appSubNames = {0:'factory',0x10:'ota_0',0x11:'ota_1',0x20:'test'};
 
-                    for (let i = 0; i < data.length; i += 32) {
+                    for (let i = 0; i + 32 <= data.length; i += 32) {
                         const magic = view.getUint16(i, true);
-                        if (magic !== 0xaa50) break; // End of partition table
-
-                        const type = view.getUint8(i + 2);
-                        const subtype = view.getUint8(i + 3);
-                        const offset = view.getUint32(i + 4, true);
-                        const size = view.getUint32(i + 8, true);
-                        const labelBytes = data.slice(i + 12, i + 28);
-                        const label = new TextDecoder().decode(labelBytes).split('\0')[0];
-
-                        const typeMap = { 0: 'app', 1: 'data', 2: 'nvs' };
-                        partitions.push({
-                            type: typeMap[type] || `type_${type}`,
-                            subtype,
-                            offset,
-                            size,
-                            label: label || `partition_${partitions.length}`,
-                            fsType: this.detectFilesystemType(data, offset)
+                        if (magic === 0xffff || magic === 0x0000) break;
+                        if (magic !== 0x50aa) continue;
+                        const type = view.getUint8(i+2), sub = view.getUint8(i+3);
+                        const offset = view.getUint32(i+4, true), size = view.getUint32(i+8, true);
+                        const label = dec.decode(data.subarray(i+12, i+28)).replace(/\0/g,'').trim();
+                        const subName = type===0 ? (appSubNames[sub]||`ota_${sub-0x10}`) : (dataSubNames[sub]||`sub_${sub}`);
+                        parts.push({
+                            label: label||subName,
+                            type: typeNames[type]||`type_${type}`,
+                            subtype: subName,
+                            offset, size,
+                            offsetHex: '0x'+offset.toString(16),
+                            sizeHex: '0x'+size.toString(16)
                         });
                     }
-
-                    return partitions;
+                    return parts;
                 },
                 detectFilesystemType(data, offset) {
                     // Placeholder - would read from offset and detect magic bytes
@@ -1817,26 +1825,56 @@
                 },
                 async loadNVS() {
                     this.nvsLoading = true;
-                    this.nvsLoadingProgress = 0;
                     try {
-                        const nvsPart = this.partitions.find(p => p.type.toLowerCase() === 'nvs');
+                        const nvsPart = this.partitions.find(p => p.label === 'nvs' || p.type === 'data');
                         if (!nvsPart) { alert('NVS partition not found'); return; }
-                        this.nvsLoadingProgress = 25;
-                        const nvsData = await this.loader.readFlash(nvsPart.offset, nvsPart.size);
-                        this.nvsLoadingProgress = 75;
-                        if (window.NVSParser) {
-                            this.nvsData = window.NVSParser.parse(new Uint8Array(nvsData));
-                        } else {
-                            this.nvsData = { error: 'NVS Parser not loaded - showing raw data. Install nvs-parser library for full parsing.' };
-                        }
-                        this.nvsLoadingProgress = 100;
+                        const raw = await this.loader.readFlash(nvsPart.offset, nvsPart.size);
+                        this.nvsData = this.parseNVS(new Uint8Array(raw));
                         await this.logAudit('nvs_inspect', 'NVS partition inspected', this.deviceInfo.mac);
-                    } catch (err) {
-                        alert('NVS load failed: ' + err.message);
-                    } finally {
-                        this.nvsLoading = false;
-                        setTimeout(() => this.nvsLoadingProgress = 0, 1000);
+                    } catch(e) { alert('NVS load failed: ' + e.message); }
+                    finally { this.nvsLoading = false; }
+                },
+                parseNVS(data) {
+                    const PAGE_SIZE = 0x1000, ENTRY_SIZE = 32, HEADER_SIZE = 32, ENTRY_TABLE_SIZE = 32;
+                    const DATA_OFFSET = HEADER_SIZE + ENTRY_TABLE_SIZE;
+                    const ITEM_TYPE = {0x01:'u8',0x11:'i8',0x02:'u16',0x12:'i16',0x04:'u32',0x14:'i32',0x08:'u64',0x18:'i64',0x21:'string',0x42:'blob_data',0x48:'blob_idx'};
+                    const entries = [];
+                    const pageCount = Math.floor(data.length / PAGE_SIZE);
+                    const dec = new TextDecoder();
+
+                    for (let p = 0; p < pageCount; p++) {
+                        const base = p * PAGE_SIZE;
+                        const view = new DataView(data.buffer, base, PAGE_SIZE);
+                        const state = view.getUint32(0, true);
+                        if (state === 0xffffffff) continue;
+                        for (let e = 0; e < 126; e++) {
+                            const byteIdx = Math.floor(e / 4), bitShift = (e % 4) * 2;
+                            const bits = (data[base + HEADER_SIZE + byteIdx] >> bitShift) & 0x03;
+                            if (bits !== 0x02) continue;
+                            const entryBase = base + DATA_OFFSET + e * ENTRY_SIZE;
+                            if (entryBase + ENTRY_SIZE > data.length) continue;
+                            const eView = new DataView(data.buffer, entryBase, ENTRY_SIZE);
+                            const ns = eView.getUint8(0);
+                            const typeCode = eView.getUint8(1);
+                            const span = eView.getUint8(2);
+                            const key = dec.decode(data.subarray(entryBase + 4, entryBase + 20)).replace(/\0/g,'');
+                            if (!key) continue;
+                            const typeName = ITEM_TYPE[typeCode] || `0x${typeCode.toString(16)}`;
+                            let value = '?';
+                            try {
+                                if (typeCode === 0x21) {
+                                    const strData = data.subarray(entryBase + ENTRY_SIZE, entryBase + ENTRY_SIZE + span * ENTRY_SIZE);
+                                    value = dec.decode(strData).replace(/\0/g,'');
+                                } else if ([0x01,0x11].includes(typeCode)) { value = eView.getUint8(20); }
+                                else if ([0x02,0x12].includes(typeCode)) { value = eView.getUint16(20, true); }
+                                else if ([0x04,0x14].includes(typeCode)) { value = eView.getUint32(20, true); }
+                                else if (typeCode === 0x48) { value = `blob (${eView.getUint16(20,true)} bytes)`; }
+                            } catch(e) {}
+                            const nsName = `ns_${ns}`;
+                            entries.push({namespace: nsName, key, type: typeName, value: String(value)});
+                        }
                     }
+                    return { entries, count: entries.length };
                 },
                 async loadSPIFFS() {
                     this.spiffsLoading = true;
@@ -1865,34 +1903,51 @@
                     this.appsLoading = true;
                     this.detectedApps = [];
                     try {
-                        for (const part of this.partitions) {
-                            if (part.type.toLowerCase() === 'app' || part.label.toLowerCase().includes('app')) {
-                                try {
-                                    const appData = await this.loader.readFlash(part.offset, 256);
-                                    const view = new DataView(appData.buffer);
-                                    const magic = view.getUint8(0);
-                                    if (magic === 0xe9) {
-                                        const minorRev = view.getUint8(1);
-                                        const chipId = view.getUint8(2);
-                                        this.detectedApps.push({
-                                            name: part.label,
-                                            version: `v${view.getUint8(3)}.${minorRev}`,
-                                            chipId: chipId,
-                                            offset: '0x' + part.offset.toString(16),
-                                            size: this.formatBytes(part.size),
-                                        });
-                                    }
-                                } catch (e) {
-                                    // Skip unreadable partitions
+                        const otaPart = this.partitions.find(p => p.label === 'otadata');
+                        if (otaPart) {
+                            const otaData = await this.loader.readFlash(otaPart.offset, 64);
+                            const activeSlot = this.detectOtaSlot(new Uint8Array(otaData));
+                            this.detectedApps.push({ name: 'OTA Status', value: activeSlot });
+                        }
+                        for (const part of this.partitions.filter(p => p.type === 'app')) {
+                            try {
+                                const hdr = await this.loader.readFlash(part.offset, 256);
+                                const v = new DataView(hdr.buffer);
+                                if (v.getUint8(0) === 0xe9) {
+                                    const dec = new TextDecoder();
+                                    const appDesc = hdr.subarray(32, 288);
+                                    const version = dec.decode(appDesc.subarray(16, 48)).replace(/\0/g,'') || 'N/A';
+                                    const projName = dec.decode(appDesc.subarray(48, 80)).replace(/\0/g,'') || part.label;
+                                    this.detectedApps.push({
+                                        name: projName, label: part.label,
+                                        version, offset: '0x' + part.offset.toString(16),
+                                        size: this.formatBytes(part.size),
+                                    });
                                 }
-                            }
+                            } catch(e) {}
                         }
                         await this.logAudit('apps_detect', `Detected ${this.detectedApps.length} apps`, this.deviceInfo.mac);
-                    } catch (err) {
-                        alert('App detection failed: ' + err.message);
-                    } finally {
-                        this.appsLoading = false;
-                    }
+                    } catch(e) { alert('App detection failed: ' + e.message); }
+                    finally { this.appsLoading = false; }
+                },
+                detectOtaSlot(data) {
+                    const crc32 = (bytes) => {
+                        let crc = 0xffffffff;
+                        for (let b of bytes) { crc ^= b; for (let i=0;i<8;i++) crc = (crc>>>1)^(0xedb88320&-(crc&1)); }
+                        return (crc ^ 0xffffffff) >>> 0;
+                    };
+                    const readEntry = (offset) => {
+                        const v = new DataView(data.buffer, offset, 32);
+                        const seq = v.getUint32(0, true);
+                        const storedCrc = v.getUint32(28, true);
+                        const seqBytes = new Uint8Array(data.buffer, offset, 4);
+                        const valid = crc32(seqBytes) === storedCrc;
+                        return { seq, valid };
+                    };
+                    const e0 = readEntry(0), e1 = readEntry(32);
+                    if (!e0.valid && !e1.valid) return 'No valid OTA data';
+                    const active = (!e1.valid || (e0.valid && e0.seq > e1.seq)) ? e0 : e1;
+                    return `Active: ota_${(active.seq - 1) % 2} (seq=${active.seq})`;
                 },
                 async detectFirmware() {
                     this.detectProgress = true;
