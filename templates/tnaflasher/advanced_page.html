@@ -1020,7 +1020,7 @@
                         <button class="btn btn-secondary" @click="stopSerialMonitor" v-if="serialActive">
                             <i class="fas fa-stop"></i> Stop
                         </button>
-                        <button class="btn btn-secondary" @click="connectDevice" v-if="!serialActive && serialMonitorMode && serialOutput">
+                        <button class="btn btn-secondary" @click="connectDevice" v-if="!serialActive && needsReconnect && serialOutput">
                             <i class="fas fa-plug"></i> Reconnect
                         </button>
                         <button class="btn btn-secondary" @click="scrollLocked = !scrollLocked"
@@ -1351,6 +1351,7 @@
                     serialPipeAbort: null,
                     scrollLocked: false,
                     serialMonitorMode: false,
+                    needsReconnect: false,
                     regAddress: '0x60007000',
                     regValue: null,
                     regWriteAddress: '',
@@ -1452,6 +1453,8 @@
                         const flashSize = this.loader.flashSize || 'Unknown';
 
                         this.isConnected = true;
+                        this.needsReconnect = false;
+                        this.serialMonitorMode = false;
                         this.activeTab = 'device-info';
                         this.deviceInfo.chipName = chipName;
                         this.deviceInfo.flashSize = flashSize;
@@ -1871,6 +1874,7 @@
                         this.serialPort = null;
                     }
                     this.serialMonitorMode = false;
+                    this.needsReconnect = true;
                     this.serialOutput += '\n[Serial monitor stopped — click "Reconnect" to restore flash operations]\n';
                 },
                 async sendSerialCommand() {
