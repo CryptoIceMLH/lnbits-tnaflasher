@@ -620,7 +620,19 @@
                     <i class="fas fa-sliders-h"></i> Registers
                 </button>
                 <button v-if="showTab('firmware_detection')" class="tab-button" :class="{ active: activeTab === 'firmware' }" @click="activeTab = 'firmware'">
-                    <i class="fas fa-search"></i> Detect Firmware
+                    <i class="fas fa-search"></i> Firmware
+                </button>
+                <button class="tab-button" :class="{ active: activeTab === 'flash-tools' }" @click="activeTab = 'flash-tools'">
+                    <i class="fas fa-tools"></i> Flash Tools
+                </button>
+                <button class="tab-button" :class="{ active: activeTab === 'nvs' }" @click="activeTab = 'nvs'">
+                    <i class="fas fa-database"></i> NVS
+                </button>
+                <button class="tab-button" :class="{ active: activeTab === 'spiffs' }" @click="activeTab = 'spiffs'">
+                    <i class="fas fa-folder"></i> SPIFFS
+                </button>
+                <button class="tab-button" :class="{ active: activeTab === 'apps' }" @click="activeTab = 'apps'">
+                    <i class="fas fa-cube"></i> Apps
                 </button>
             </div>
 
@@ -1030,20 +1042,159 @@
         <div v-if="!isConnected" style="text-align: center; padding: 40px; color: #666;">
             <i class="fas fa-plug" style="font-size: 48px; margin-bottom: 15px; opacity: 0.3;"></i>
             <p style="font-size: 16px;">Connect a device via USB to begin</p>
+            <!-- Flash Tools Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'flash-tools' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Erase Flash</div>
+                    <p style="color: #aaa; margin-bottom: 15px; font-size: 13px;">Erase flash memory. WARNING: Data will be lost!</p>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; color: #999; font-size: 13px;">Erase Mode</label>
+                        <div style="display: flex; gap: 10px;">
+                            <label style="flex: 1;"><input type="radio" v-model="eraseMode" value="full"> Full Flash</label>
+                            <label style="flex: 1;"><input type="radio" v-model="eraseMode" value="partition"> Partition</label>
+                            <label style="flex: 1;"><input type="radio" v-model="eraseMode" value="region"> Region</label>
+                        </div>
+                    </div>
+                    <div v-if="eraseMode === 'partition'" style="margin-bottom: 15px;">
+                        <select class="input-field" v-model="erasePartitionSelected" style="width: 100%;">
+                            <option value="">Select partition...</option>
+                            <option v-for="part in partitions" :key="part.label" :value="part.label">
+                                {{ part.label }} ({{ formatBytes(part.size) }})
+                            </option>
+                        </select>
+                    </div>
+                    <div v-if="eraseMode === 'region'" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <input type="text" class="input-field" v-model="eraseRegionOffset" placeholder="Offset (0x...)" style="flex: 1;">
+                        <input type="text" class="input-field" v-model="eraseRegionLength" placeholder="Length (0x...)" style="flex: 1;">
+                    </div>
+                    <button class="btn" @click="eraseFlash" :disabled="erasing" style="background: #d32f2f;">
+                        <i :class="erasing ? 'fas fa-spinner fa-spin' : 'fas fa-fire'"></i> {{ erasing ? 'Erasing...' : 'Start Erase' }}
+                    </button>
+                    <div v-if="eraseProgress > 0 && eraseProgress < 100" class="progress-bar" style="margin-top: 10px;">
+                        <div class="progress-fill" :style="{ width: eraseProgress + '%' }">{{ eraseProgress }}%</div>
+                    </div>
+                </div>
+
+                <div class="tab-section">
+                    <div class="tab-section-title">Write Flash</div>
+                    <p style="color: #aaa; margin-bottom: 15px; font-size: 13px;">Write a binary file to flash memory.</p>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; color: #999; font-size: 13px;">Select File</label>
+                        <input type="file" class="input-field" @change="selectWriteFile" style="width: 100%; padding: 12px; cursor: pointer;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; color: #999; font-size: 13px;">Write Address</label>
+                        <input type="text" class="input-field" v-model="writeAddress" placeholder="0x0" style="width: 100%;">
+                    </div>
+                    <button class="btn" @click="writeFlash" :disabled="writing || !writeFile" style="background: #4caf50;">
+                        <i :class="writing ? 'fas fa-spinner fa-spin' : 'fas fa-arrow-up'"></i> {{ writing ? 'Writing...' : 'Write to Flash' }}
+                    </button>
+                    <div v-if="writeProgress > 0 && writeProgress < 100" class="progress-bar" style="margin-top: 10px;">
+                        <div class="progress-fill" :style="{ width: writeProgress + '%' }">{{ writeProgress }}%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NVS Inspector Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'nvs' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">NVS Inspector</div>
+                    <p style="color: #aaa; margin-bottom: 15px; font-size: 13px;">Read and inspect Non-Volatile Storage (NVS) partition.</p>
+                    <button class="btn" @click="loadNVS" :disabled="nvsLoading" style="margin-bottom: 15px;">
+                        <i :class="nvsLoading ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i> {{ nvsLoading ? 'Loading...' : 'Load NVS' }}
+                    </button>
+                    <div v-if="nvsLoadingProgress > 0 && nvsLoadingProgress < 100" class="progress-bar">
+                        <div class="progress-fill" :style="{ width: nvsLoadingProgress + '%' }">{{ nvsLoadingProgress }}%</div>
+                    </div>
+                    <div v-if="nvsData" class="terminal" style="margin-top: 15px; max-height: 400px; overflow-y: auto;">
+                        <pre>{{ JSON.stringify(nvsData, null, 2) }}</pre>
+                    </div>
+                    <div v-else style="padding: 20px; text-align: center; color: #666; background: #2a2a2a; border-radius: 6px; margin-top: 15px;">
+                        Click "Load NVS" to inspect partition
+                    </div>
+                </div>
+            </div>
+
+            <!-- SPIFFS Tools Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'spiffs' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">SPIFFS Tools</div>
+                    <p style="color: #aaa; margin-bottom: 15px; font-size: 13px;">Browse and inspect SPI Flash File System (SPIFFS) partition.</p>
+                    <button class="btn" @click="loadSPIFFS" :disabled="spiffsLoading" style="margin-bottom: 15px;">
+                        <i :class="spiffsLoading ? 'fas fa-spinner fa-spin' : 'fas fa-folder-open'"></i> {{ spiffsLoading ? 'Loading...' : 'Load SPIFFS' }}
+                    </button>
+                    <div v-if="spiffsLoadingProgress > 0 && spiffsLoadingProgress < 100" class="progress-bar">
+                        <div class="progress-fill" :style="{ width: spiffsLoadingProgress + '%' }">{{ spiffsLoadingProgress }}%</div>
+                    </div>
+                    <div v-if="spiffsFiles.length > 0" class="file-browser" style="margin-top: 15px;">
+                        <div v-for="file in spiffsFiles" :key="file.name" class="file-item">
+                            <div class="file-item-name">
+                                <i :class="file.isDir ? 'fas fa-folder text-yellow-500' : 'fas fa-file'"></i>
+                                {{ file.name }}
+                            </div>
+                            <div class="file-item-size">{{ formatBytes(file.size) }}</div>
+                        </div>
+                    </div>
+                    <div v-else style="padding: 20px; text-align: center; color: #666; background: #2a2a2a; border-radius: 6px; margin-top: 15px;">
+                        Click "Load SPIFFS" to browse files
+                    </div>
+                </div>
+            </div>
+
+            <!-- Apps Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'apps' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Installed Apps</div>
+                    <p style="color: #aaa; margin-bottom: 15px; font-size: 13px;">Detect and list firmware applications on the device.</p>
+                    <button class="btn" @click="detectApps" :disabled="appsLoading" style="margin-bottom: 15px;">
+                        <i :class="appsLoading ? 'fas fa-spinner fa-spin' : 'fas fa-cube'"></i> {{ appsLoading ? 'Detecting...' : 'Detect Apps' }}
+                    </button>
+                    <div v-if="detectedApps.length > 0" class="table-wrapper" style="margin-top: 15px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Version</th>
+                                    <th>Chip ID</th>
+                                    <th>Offset</th>
+                                    <th>Size</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="app in detectedApps" :key="app.name">
+                                    <td>{{ app.name }}</td>
+                                    <td>{{ app.version }}</td>
+                                    <td style="font-family: monospace; font-size: 12px;">0x{{ app.chipId.toString(16) }}</td>
+                                    <td style="font-family: monospace; font-size: 12px;">{{ app.offset }}</td>
+                                    <td>{{ app.size }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-else style="padding: 20px; text-align: center; color: #666; background: #2a2a2a; border-radius: 6px; margin-top: 15px;">
+                        Click "Detect Apps" to scan for installed applications
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="footer">
             <p><a href="javascript:history.back()">← Back to Flasher</a></p>
-            <p style="margin-top: 10px; font-size: 11px; color: #555;">TNA Advanced Control Center v1.0 | Powered by esptool.js</p>
+            <p style="margin-top: 10px; font-size: 11px; color: #555;">TNA Advanced Control Center v2.0 | Powered by tasmota-webserial-esptool</p>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.umd.prod.js"></script>
     <script type="module">
-        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.6/bundle.js';
+        import { ESPLoader, Transport } from 'https://unpkg.com/tasmota-webserial-esptool@0.5.7/bundle.js';
         window.ESPLoader = ESPLoader;
         window.Transport = Transport;
+        // Also load NVS and SPIFFS parsers
+        const nvsModule = await import('https://cdn.jsdelivr.net/npm/nvs-parser@1.0.0/dist/index.esm.js').catch(() => null);
+        const spiffsModule = await import('https://cdn.jsdelivr.net/npm/spiffs-parser@1.0.0/dist/index.esm.js').catch(() => null);
+        window.NVSParser = nvsModule?.NVSParser || null;
+        window.SPIFFSParser = spiffsModule?.SPIFFSParser || null;
     </script>
 
     <script>
@@ -1117,7 +1268,30 @@
                     detectionAttempted: false,
                     featureFlags: {},
                     loader: null,
-                    transport: null
+                    transport: null,
+                    // Flash Tools
+                    eraseMode: 'full',
+                    erasePartitionSelected: '',
+                    eraseRegionOffset: '0x0',
+                    eraseRegionLength: '0x1000',
+                    eraseProgress: 0,
+                    erasing: false,
+                    // Write Flash
+                    writeFile: null,
+                    writeAddress: '0x0',
+                    writeProgress: 0,
+                    writing: false,
+                    // NVS Inspector
+                    nvsData: null,
+                    nvsLoadingProgress: 0,
+                    nvsLoading: false,
+                    // SPIFFS Tools
+                    spiffsFiles: [],
+                    spiffsLoadingProgress: 0,
+                    spiffsLoading: false,
+                    // Apps
+                    detectedApps: [],
+                    appsLoading: false,
                 };
             },
             computed: {
@@ -1553,6 +1727,149 @@
                         await this.logAudit('register_write', `Wrote register 0x${addr.toString(16)} = 0x${val.toString(16)}`, this.deviceInfo.mac);
                     } catch (err) {
                         alert('Failed to write register: ' + err.message);
+                    }
+                },
+                async eraseFlash() {
+                    if (this.eraseMode === 'full' && !confirm('Erase ENTIRE flash? This cannot be undone!')) return;
+                    this.erasing = true;
+                    this.eraseProgress = 0;
+                    try {
+                        if (this.eraseMode === 'full') {
+                            await this.loader.eraseFlash();
+                            this.eraseProgress = 100;
+                            alert('Flash erased successfully');
+                            await this.logAudit('erase_flash', 'Full flash erase', this.deviceInfo.mac);
+                        } else if (this.eraseMode === 'partition') {
+                            const partition = this.partitions.find(p => p.label === this.erasePartitionSelected);
+                            if (!partition) { alert('Partition not found'); return; }
+                            await this.loader.eraseRegion(partition.offset, partition.size);
+                            this.eraseProgress = 100;
+                            alert(`Partition ${partition.label} erased`);
+                            await this.logAudit('erase_partition', `Erased: ${partition.label}`, this.deviceInfo.mac);
+                        } else if (this.eraseMode === 'region') {
+                            const offset = parseInt(this.eraseRegionOffset, 16);
+                            const length = parseInt(this.eraseRegionLength, 16);
+                            if (isNaN(offset) || isNaN(length)) { alert('Invalid offset or length'); return; }
+                            await this.loader.eraseRegion(offset, length);
+                            this.eraseProgress = 100;
+                            alert('Region erased');
+                            await this.logAudit('erase_region', `Erased region 0x${offset.toString(16)}-0x${(offset+length).toString(16)}`, this.deviceInfo.mac);
+                        }
+                    } catch (err) {
+                        alert('Erase failed: ' + err.message);
+                    } finally {
+                        this.erasing = false;
+                        setTimeout(() => this.eraseProgress = 0, 1000);
+                    }
+                },
+                async writeFlash() {
+                    if (!this.writeFile) { alert('Please select a file'); return; }
+                    const addr = parseInt(this.writeAddress, 16);
+                    if (isNaN(addr)) { alert('Invalid address'); return; }
+                    this.writing = true;
+                    this.writeProgress = 0;
+                    try {
+                        const reader = new FileReader();
+                        reader.onload = async (e) => {
+                            try {
+                                const data = new Uint8Array(e.target.result);
+                                await this.loader.writeFlash({ fileArray: [{ data, address: addr }], flashSize: 'keep' });
+                                this.writeProgress = 100;
+                                alert('Flash write successful');
+                                await this.logAudit('write_flash', `Wrote ${data.length} bytes at 0x${addr.toString(16)}`, this.deviceInfo.mac);
+                            } catch (err) {
+                                alert('Write failed: ' + err.message);
+                            } finally {
+                                this.writing = false;
+                                setTimeout(() => this.writeProgress = 0, 1000);
+                            }
+                        };
+                        reader.readAsArrayBuffer(this.writeFile);
+                    } catch (err) {
+                        alert('File read failed: ' + err.message);
+                        this.writing = false;
+                    }
+                },
+                selectWriteFile(e) {
+                    this.writeFile = e.target.files[0];
+                },
+                async loadNVS() {
+                    this.nvsLoading = true;
+                    this.nvsLoadingProgress = 0;
+                    try {
+                        const nvsPart = this.partitions.find(p => p.type.toLowerCase() === 'nvs');
+                        if (!nvsPart) { alert('NVS partition not found'); return; }
+                        this.nvsLoadingProgress = 25;
+                        const nvsData = await this.loader.readFlash(nvsPart.offset, nvsPart.size);
+                        this.nvsLoadingProgress = 75;
+                        if (window.NVSParser) {
+                            this.nvsData = window.NVSParser.parse(new Uint8Array(nvsData));
+                        } else {
+                            this.nvsData = { error: 'NVS Parser not loaded - showing raw data. Install nvs-parser library for full parsing.' };
+                        }
+                        this.nvsLoadingProgress = 100;
+                        await this.logAudit('nvs_inspect', 'NVS partition inspected', this.deviceInfo.mac);
+                    } catch (err) {
+                        alert('NVS load failed: ' + err.message);
+                    } finally {
+                        this.nvsLoading = false;
+                        setTimeout(() => this.nvsLoadingProgress = 0, 1000);
+                    }
+                },
+                async loadSPIFFS() {
+                    this.spiffsLoading = true;
+                    this.spiffsLoadingProgress = 0;
+                    try {
+                        const spiffsPart = this.partitions.find(p => p.type.toLowerCase() === 'data' || p.label.toLowerCase().includes('spiffs'));
+                        if (!spiffsPart) { alert('SPIFFS partition not found'); return; }
+                        this.spiffsLoadingProgress = 25;
+                        const spiffsData = await this.loader.readFlash(spiffsPart.offset, spiffsPart.size);
+                        this.spiffsLoadingProgress = 75;
+                        if (window.SPIFFSParser) {
+                            this.spiffsFiles = window.SPIFFSParser.parseFiles(new Uint8Array(spiffsData));
+                        } else {
+                            this.spiffsFiles = [{ name: 'Parser not loaded - install spiffs-parser library for file listing', size: 0 }];
+                        }
+                        this.spiffsLoadingProgress = 100;
+                        await this.logAudit('spiffs_inspect', 'SPIFFS partition inspected', this.deviceInfo.mac);
+                    } catch (err) {
+                        alert('SPIFFS load failed: ' + err.message);
+                    } finally {
+                        this.spiffsLoading = false;
+                        setTimeout(() => this.spiffsLoadingProgress = 0, 1000);
+                    }
+                },
+                async detectApps() {
+                    this.appsLoading = true;
+                    this.detectedApps = [];
+                    try {
+                        for (const part of this.partitions) {
+                            if (part.type.toLowerCase() === 'app' || part.label.toLowerCase().includes('app')) {
+                                try {
+                                    const appData = await this.loader.readFlash(part.offset, 256);
+                                    const view = new DataView(appData.buffer);
+                                    const magic = view.getUint8(0);
+                                    if (magic === 0xe9) {
+                                        const minorRev = view.getUint8(1);
+                                        const chipId = view.getUint8(2);
+                                        this.detectedApps.push({
+                                            name: part.label,
+                                            version: `v${view.getUint8(3)}.${minorRev}`,
+                                            chipId: chipId,
+                                            offset: '0x' + part.offset.toString(16),
+                                            size: this.formatBytes(part.size),
+                                        });
+                                    }
+                                } catch (e) {
+                                    // Skip unreadable partitions
+                                }
+                            }
+                        }
+                        await this.logAudit('apps_detect', `Detected ${this.detectedApps.length} apps`, this.deviceInfo.mac);
+                    } catch (err) {
+                        alert('App detection failed: ' + err.message);
+                    } finally {
+                        this.appsLoading = false;
                     }
                 },
                 async detectFirmware() {
