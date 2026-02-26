@@ -641,16 +641,16 @@
                 <button v-if="showTab('firmware_detection')" class="tab-button" :class="{ active: activeTab === 'firmware' }" @click="activeTab = 'firmware'">
                     <i class="fas fa-search"></i> Firmware
                 </button>
-                <button class="tab-button" :class="{ active: activeTab === 'flash-tools' }" @click="activeTab = 'flash-tools'">
+                <button v-if="showTab('flash_tools')" class="tab-button" :class="{ active: activeTab === 'flash-tools' }" @click="activeTab = 'flash-tools'">
                     <i class="fas fa-tools"></i> Flash Tools
                 </button>
-                <button class="tab-button" :class="{ active: activeTab === 'nvs' }" @click="activeTab = 'nvs'">
+                <button v-if="showTab('nvs')" class="tab-button" :class="{ active: activeTab === 'nvs' }" @click="activeTab = 'nvs'">
                     <i class="fas fa-database"></i> NVS
                 </button>
-                <button class="tab-button" :class="{ active: activeTab === 'spiffs' }" @click="activeTab = 'spiffs'">
+                <button v-if="showTab('spiffs')" class="tab-button" :class="{ active: activeTab === 'spiffs' }" @click="activeTab = 'spiffs'">
                     <i class="fas fa-folder"></i> SPIFFS
                 </button>
-                <button class="tab-button" :class="{ active: activeTab === 'apps' }" @click="activeTab = 'apps'">
+                <button v-if="showTab('apps')" class="tab-button" :class="{ active: activeTab === 'apps' }" @click="activeTab = 'apps'">
                     <i class="fas fa-cube"></i> Apps
                 </button>
             </div>
@@ -1262,7 +1262,7 @@
                     serialActive: false,
                     serialOutput: '',
                     serialCommand: '',
-                    regAddress: '',
+                    regAddress: '0x60007000',
                     regValue: null,
                     regWriteAddress: '',
                     regWriteValue: '',
@@ -1314,7 +1314,11 @@
                             'serial_monitor': 'feature_serial_monitor',
                             'firmware_detection': 'feature_firmware_detection',
                             'register_read': 'feature_register_read',
-                            'register_write': 'feature_register_write'
+                            'register_write': 'feature_register_write',
+                            'flash_tools': 'feature_flash_tools',
+                            'nvs': 'feature_nvs',
+                            'spiffs': 'feature_spiffs',
+                            'apps': 'feature_apps'
                         };
                         const flagKey = flagMap[tabName];
                         return this.featureFlags[flagKey] !== false;
@@ -1633,12 +1637,14 @@
                 },
                 async readRegister() {
                     try {
-                        const addr = parseInt(this.regAddress, 16);
-                        if (isNaN(addr)) {
-                            alert('Invalid address format');
+                        const cleaned = this.regAddress.trim().replace(/^0x/i, '');
+                        const addr = parseInt(cleaned, 16);
+                        if (isNaN(addr) || cleaned === '') {
+                            alert('Invalid address. Use hex format e.g. 0x60007000');
                             return;
                         }
-                        this.regValue = await this.loader.readReg(addr);
+                        const val = await this.loader.readReg(addr);
+                        this.regValue = '0x' + (val >>> 0).toString(16).toUpperCase().padStart(8, '0');
                     } catch (err) {
                         alert('Failed to read register: ' + err.message);
                     }
@@ -1856,42 +1862,44 @@
                 },
                 async detectFirmware() {
                     this.detectProgress = true;
-                    this.detectionOutput = 'Scanning for firmware...\n';
-                    this.detectionAttempted = false;
+                    this.detectionOutput = 'Scanning partitions for firmware...\n';
                     this.detectedFirmware = null;
-
                     try {
-                        // Try to detect via flash ID first
-                        try {
-                            const flashId = await this.loader.readFlashId();
-                            this.detectionOutput += `Flash ID: 0x${flashId.toString(16)}\n`;
-                        } catch (e) {
-                            this.detectionOutput += 'Flash ID detection not supported\n';
+                        const appParts = this.partitions.filter(p => p.type === 'app');
+                        if (!appParts.length) {
+                            this.detectionOutput += 'No app partitions found. Load partitions first.\n';
+                            this.detectionAttempted = true;
+                            return;
                         }
-
-                        // Read boot loader from 0x0 and app from 0x1000 to detect firmware type
-                        try {
-                            const appData = await this.loader.readFlash(0x1000, 256);
-                            const view = new DataView(appData.buffer);
-
-                            // Check for common firmware magic bytes
-                            if (view.getUint8(0) === 0xe9) {
-                                this.detectionOutput += 'Valid ESP firmware image detected\n';
-                                this.detectedFirmware = { name: 'ESP Firmware', version: 'Unknown' };
+                        for (const part of appParts) {
+                            try {
+                                const data = await this.loader.readFlash(part.offset, 256);
+                                const view = new DataView(data.buffer);
+                                if (view.getUint8(0) !== 0xe9) continue;
+                                this.detectionOutput += `✓ Valid image at ${part.offsetHex} (${part.label})\n`;
+                                // App description at offset 32 (after image header)
+                                const dec = new TextDecoder();
+                                const projName = dec.decode(data.subarray(48+32, 80+32)).replace(/\0/g,'').trim();
+                                const version  = dec.decode(data.subarray(16+32, 48+32)).replace(/\0/g,'').trim();
+                                this.detectedFirmware = {
+                                    name: projName || part.label,
+                                    version: version || 'Unknown'
+                                };
+                                this.detectionOutput += `  Name: ${this.detectedFirmware.name}\n`;
+                                this.detectionOutput += `  Version: ${this.detectedFirmware.version}\n`;
+                            } catch(e) {
+                                this.detectionOutput += `  Could not read ${part.label}: ${e.message}\n`;
                             }
-                        } catch (e) {
-                            this.detectionOutput += 'Unable to read firmware region\n';
                         }
-
-                        this.detectionOutput += 'Scan complete.\n';
+                        if (!this.detectedFirmware) {
+                            this.detectionOutput += 'No valid firmware image found in app partitions.\n';
+                        }
                         this.detectionAttempted = true;
                         await this.logAudit('firmware_detection', 'Firmware scan performed', this.deviceInfo.mac);
-                    } catch (err) {
-                        this.detectionOutput += 'Detection failed: ' + err.message + '\n';
+                    } catch(e) {
+                        this.detectionOutput += 'Detection failed: ' + e.message + '\n';
                         this.detectionAttempted = true;
-                    } finally {
-                        this.detectProgress = false;
-                    }
+                    } finally { this.detectProgress = false; }
                 },
                 async loadFeatureFlags() {
                     try {
@@ -1906,7 +1914,7 @@
                     if (!this.featureFlags.feature_audit_logging) return;
 
                     try {
-                        await fetch('/tnaflasher/api/v1/advanced/audit-log', {
+                        await fetch(`/tnaflasher/api/v1/advanced/audit-log?wallet_id=${WALLET_ID}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1922,6 +1930,10 @@
             },
             async created() {
                 await this.loadFeatureFlags();
+                // Check if advanced page is enabled
+                if (this.featureFlags.feature_advanced_page === false) {
+                    window.location.href = window.location.origin + '/tnaflasher/' + WALLET_ID;
+                }
             }
         });
 

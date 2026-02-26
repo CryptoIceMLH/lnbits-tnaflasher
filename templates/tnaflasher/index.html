@@ -473,6 +473,10 @@
               <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_firmware_detection" @update:model-value="toggleFeature('feature_firmware_detection')" size="sm" label="Firmware Detection Tab" /></div>
               <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_register_read" @update:model-value="toggleFeature('feature_register_read')" size="sm" label="Register Read" /></div>
               <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_register_write" @update:model-value="toggleFeature('feature_register_write')" size="sm" label="Register Write" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_flash_tools" @update:model-value="toggleFeature('feature_flash_tools')" size="sm" label="Flash Tools Tab" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_nvs" @update:model-value="toggleFeature('feature_nvs')" size="sm" label="NVS Tab" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_spiffs" @update:model-value="toggleFeature('feature_spiffs')" size="sm" label="SPIFFS Tab" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_apps" @update:model-value="toggleFeature('feature_apps')" size="sm" label="Apps Tab" /></div>
               <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_audit_logging" @update:model-value="toggleFeature('feature_audit_logging')" size="sm" label="Audit Logging" /></div>
             </div>
           </div>
@@ -686,6 +690,10 @@
           feature_firmware_detection: true,
           feature_register_read: true,
           feature_register_write: true,
+          feature_flash_tools: true,
+          feature_nvs: true,
+          feature_spiffs: true,
+          feature_apps: true,
           feature_audit_logging: true,
         },
         savingFeature: false,
