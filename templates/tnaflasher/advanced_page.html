@@ -941,6 +941,10 @@
                         </div>
                     </div>
 
+                    <div v-if="filesystemMessage" style="padding: 12px 15px; color: #aaa; background: #2a2a2a; border-radius: 6px; margin-top: 10px; font-size: 13px;">
+                        <i class="fas fa-info-circle" style="color: #f7931a; margin-right: 8px;"></i>{{ filesystemMessage }}
+                    </div>
+
                     <div class="tab-section" v-if="showTab('filesystem_write')">
                         <div class="tab-section-title">Upload File</div>
                         <input type="file" class="input-field" @change="selectFile" style="width: 100%; padding: 12px; cursor: pointer;">
@@ -1383,6 +1387,7 @@
                     spiffsLoadingProgress: 0,
                     spiffsLoading: false,
                     spiffsMessage: '',
+                    filesystemMessage: '',
                     // Apps
                     detectedApps: [],
                     appsLoading: false,
@@ -1450,18 +1455,33 @@
                         this.deviceInfo.flashSize = flashSize;
                         this.deviceInfo.baudRate = '115,200 bps';
 
-                        // --- Package & Revision (eFuse reads not available in stub mode) ---
+                        // --- Package & Revision ---
                         this.deviceInfo.chipVariant   = chipName;
                         this.deviceInfo.pkgFormFactor = 'N/A';
                         this.deviceInfo.pkgVersion    = 'N/A';
                         this.deviceInfo.majorVersion  = 'N/A';
                         this.deviceInfo.minorVersion  = 'N/A';
-                        this.deviceInfo.revision      = 'N/A';
                         this.deviceInfo.description   = chipName;
                         this.deviceInfo.efuseBlockVersion = 'N/A';
+                        // Try to read revision from eFuse
+                        try {
+                            const efuse = await this.loader.readRegister(0x60007044);
+                            const minorRev = (efuse >> 18) & 0x3;  // bits [19:18]
+                            const majorRev = (efuse >> 20) & 0x3;  // bits [21:20]
+                            this.deviceInfo.revision = `v${majorRev}.${minorRev}`;
+                        } catch(e) {
+                            this.deviceInfo.revision = 'N/A';
+                        }
 
                         // --- Flash & PSRAM ---
-                        this.deviceInfo.psram        = 'N/A';
+                        // Detect PSRAM from chipName (ESP32-S3-R2 = 2MB, ESP32-S3-R8 = 8MB, etc.)
+                        const match = chipName.match(/R(\d+)/i);
+                        if (match) {
+                            const mb = parseInt(match[1]);
+                            this.deviceInfo.psram = `${mb} MB PSRAM`;
+                        } else {
+                            this.deviceInfo.psram = 'None';
+                        }
                         this.deviceInfo.psramVendor  = '';
                         this.deviceInfo.crystal      = '40 MHz';
                         this.deviceInfo.cpuCores     = '2 (Dual)';
@@ -1471,20 +1491,51 @@
                         const features = ['Wi-Fi', 'BLE', 'Dual Core', '240 MHz'];
                         this.deviceInfo.features = features;
 
-                        // --- MAC Address --- use getMacAddress() method
+                        // --- MAC Address --- getMacAddress() or eFuse fallback
                         try {
-                            let macStr = 'N/A';
+                            let mac = 'Unable to read';
                             if (typeof this.loader.getMacAddress === 'function') {
-                                macStr = await this.loader.getMacAddress();
+                                mac = await this.loader.getMacAddress();
+                            } else {
+                                // Fallback: read eFuse directly (ESP32-S3: 0x60007044, 0x60007048)
+                                const mac1 = await this.loader.readRegister(0x60007044);
+                                const mac2 = await this.loader.readRegister(0x60007048);
+                                const bytes = [
+                                    (mac2 >> 8) & 0xff, mac2 & 0xff,
+                                    (mac1 >> 24) & 0xff, (mac1 >> 16) & 0xff,
+                                    (mac1 >> 8) & 0xff, mac1 & 0xff
+                                ];
+                                mac = bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(':');
                             }
-                            this.deviceInfo.mac = macStr || 'N/A';
+                            this.deviceInfo.mac = mac || 'Unable to read';
                         } catch(e) {
-                            this.deviceInfo.mac = 'N/A';
+                            // Final fallback
+                            try {
+                                const mac1 = await this.loader.readRegister(0x60007044);
+                                const mac2 = await this.loader.readRegister(0x60007048);
+                                const bytes = [
+                                    (mac2 >> 8) & 0xff, mac2 & 0xff,
+                                    (mac1 >> 24) & 0xff, (mac1 >> 16) & 0xff,
+                                    (mac1 >> 8) & 0xff, mac1 & 0xff
+                                ];
+                                this.deviceInfo.mac = bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(':');
+                            } catch(e2) {
+                                this.deviceInfo.mac = 'Unable to read';
+                            }
                         }
 
-                        // --- Flash ID, Manufacturer, Device (not available in stub mode) ---
-                        this.deviceInfo.flashId = 'N/A';
-                        this.deviceInfo.flashManufacturer = 'N/A';
+                        // --- Flash ID and Manufacturer (read from SPI register) ---
+                        try {
+                            // SPI0 FLASH_ID register (ESP32-S3): 0x60002060
+                            const flashIdReg = await this.loader.readRegister(0x60002060);
+                            const mfr = (flashIdReg >> 16) & 0xff;
+                            this.deviceInfo.flashId = `0x${flashIdReg.toString(16).padStart(6, '0').toUpperCase()}`;
+                            const mfrMap = { 0xEF: 'Winbond', 0x20: 'Micron/ST', 0xC8: 'GigaDevice', 0x85: 'Puya', 0xEB: 'XMC', 0x68: 'BOYA' };
+                            this.deviceInfo.flashManufacturer = mfrMap[mfr] || `0x${mfr.toString(16).toUpperCase()}`;
+                        } catch(e) {
+                            this.deviceInfo.flashId = 'Not available';
+                            this.deviceInfo.flashManufacturer = 'Not available';
+                        }
                         this.deviceInfo.flashDevice = '';
 
                         // --- Flash size ---
@@ -1571,14 +1622,19 @@
                         const offset = view.getUint32(i+4, true), size = view.getUint32(i+8, true);
                         const label = dec.decode(data.subarray(i+12, i+28)).replace(/\0/g,'').trim();
                         const subName = type===0 ? (appSubNames[sub]||`ota_${sub-0x10}`) : (dataSubNames[sub]||`sub_${sub}`);
-                        parts.push({
+                        const part = {
                             label: label||subName,
                             type: typeNames[type]||`type_${type}`,
                             subtype: subName,
                             offset, size,
                             offsetHex: '0x'+offset.toString(16),
                             sizeHex: '0x'+size.toString(16)
-                        });
+                        };
+                        // fsType for data partitions (spiffs, fat, littlefs, nvs, etc.)
+                        if (type === 1) {
+                            part.fsType = subName;
+                        }
+                        parts.push(part);
                     }
                     return parts;
                 },
@@ -1603,10 +1659,41 @@
                     return colors[type.toLowerCase()] || '#888';
                 },
                 async loadFilesystem() {
-                    this.files = [
-                        { name: 'example.txt', size: 1024, isDir: false },
-                        { name: 'config', size: 0, isDir: true }
-                    ];
+                    if (!this.selectedPartition) return;
+                    const part = this.partitions.find(p => p.label === this.selectedPartition);
+                    if (!part) return;
+
+                    this.files = [];
+                    this.filesystemMessage = '';
+                    try {
+                        // Read raw partition data
+                        const data = await this.loader.readFlash(part.offset, Math.min(part.size, 256));
+                        // Check magic bytes to identify FS type
+                        const view = new DataView(data.buffer);
+                        const magic = view.getUint32(0, true);
+
+                        let fsType = 'Unknown';
+                        if (magic === 0x20894a46) fsType = 'SPIFFS';        // SPIFFS magic
+                        else if (magic === 0x0000004c) fsType = 'LittleFS'; // LittleFS superblock magic
+                        else if (magic === 0x41474546) fsType = 'FATFS';    // FAT magic 'FEGA'
+
+                        // Download full partition for external analysis
+                        const fullData = await this.loader.readFlash(part.offset, part.size);
+                        const blob = new Blob([fullData], { type: 'application/octet-stream' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${part.label}-${fsType}.bin`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+
+                        this.filesystemMessage = `${fsType} partition (${this.formatBytes(part.size)}) downloaded as ${part.label}-${fsType}.bin. Use esptool.py or LittleFS tools to inspect files.`;
+                        await this.logAudit('filesystem_inspect', `Filesystem partition ${part.label} read`, this.deviceInfo.mac);
+                    } catch(e) {
+                        alert('Failed to read filesystem: ' + e.message);
+                    }
                 },
                 selectFile(e) {
                     this.selectedFile = e.target.files[0];
@@ -1704,21 +1791,37 @@
                     this.scrollLocked = false;
                     this.serialOutput = `[Serial monitor started at ${this.baudRate} baud]\n`;
                     try {
-                        // Step 1: fully disconnect stub so chip resets and runs firmware
+                        // Step 1: save port reference before disconnecting
+                        const port = this.loader.port;
+
+                        // Step 2: disconnect stub protocol
                         this.serialOutput += '[Disconnecting flash stub to allow firmware to boot...]\n';
                         await this.loader.disconnect();
+
+                        // Step 3: send RTS hardware reset pulse (port still open at this point)
+                        try {
+                            await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+                            await new Promise(r => setTimeout(r, 100));
+                            await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+                            this.serialOutput += '[Reset pulse sent — device rebooting...]\n';
+                        } catch(e) {
+                            this.serialOutput += `[RTS reset failed: ${e.message} — manually reset device]\n`;
+                        }
+
+                        // Step 4: null the loader (it's dead now)
+                        this.loader = null;
+                        this.isConnected = false;
                         this.serialMonitorMode = true;
 
-                        // Step 2: wait for chip to boot
-                        await new Promise(r => setTimeout(r, 600));
+                        // Step 5: wait for device to boot
+                        await new Promise(r => setTimeout(r, 800));
                         this.serialOutput += '[Device booting firmware — listening...]\n';
 
-                        // Step 3: reopen port for raw serial at user-selected baud
-                        const port = this.loader.port;
+                        // Step 6: reopen port for raw serial at user-selected baud
                         await port.open({ baudRate: parseInt(this.baudRate) || 115200 });
                         this.serialPort = port;
 
-                        // Step 4: pipe through TextDecoderStream
+                        // Step 7: pipe through TextDecoderStream
                         const decoder = new TextDecoderStream();
                         this.serialPipeAbort = new AbortController();
                         port.readable.pipeTo(decoder.writable, { signal: this.serialPipeAbort.signal }).catch(() => {});
@@ -2030,6 +2133,10 @@
                     return `Active: ota_${(active.seq - 1) % 2} (seq=${active.seq})`;
                 },
                 async detectFirmware() {
+                    if (!this.loader || !this.isConnected) {
+                        alert('Connect device first');
+                        return;
+                    }
                     this.detectProgress = true;
                     this.detectionOutput = 'Scanning partitions for firmware...\n';
                     this.detectedFirmware = null;
