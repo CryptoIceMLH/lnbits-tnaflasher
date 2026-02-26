@@ -216,28 +216,40 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             overflow: hidden;
+            display: flex;
+            flex-direction: row;
+            min-height: 500px;
         }
 
         .tabs-nav {
             display: flex;
-            border-bottom: 1px solid var(--border);
-            overflow-x: auto;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            border-bottom: none;
             background: var(--bg-secondary);
+            width: 160px;
+            flex-shrink: 0;
+            overflow-y: auto;
         }
 
         .tab-button {
-            flex: 1;
-            min-width: 120px;
+            flex: none;
+            width: 100%;
+            min-width: unset;
             padding: 12px 16px;
             background: transparent;
             color: var(--text-muted);
             border: none;
+            border-left: 3px solid transparent;
+            border-bottom: none;
             cursor: pointer;
             font-weight: 500;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
+            transition: all 0.2s;
             white-space: nowrap;
             font-size: 13px;
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .tab-button:hover {
@@ -247,7 +259,14 @@
 
         .tab-button.active {
             color: var(--accent);
-            border-bottom-color: var(--accent);
+            border-left-color: var(--accent);
+            background: rgba(247, 147, 26, 0.05);
+        }
+
+        .tabs-content-area {
+            flex: 1;
+            overflow: auto;
+            min-width: 0;
         }
 
         .tab-content {
@@ -567,10 +586,32 @@
                 min-width: auto;
             }
 
+            .tabs-container {
+                flex-direction: column;
+                min-height: auto;
+            }
+
+            .tabs-nav {
+                flex-direction: row;
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                overflow-x: auto;
+                overflow-y: hidden;
+            }
+
             .tab-button {
-                min-width: 100px;
+                flex-shrink: 0;
+                border-left: none;
+                border-bottom: 3px solid transparent;
+                min-width: 110px;
                 font-size: 12px;
                 padding: 10px 12px;
+            }
+
+            .tab-button.active {
+                border-left-color: transparent;
+                border-bottom-color: var(--accent);
             }
         }
     </style>
@@ -654,6 +695,8 @@
                     <i class="fas fa-cube"></i> Apps
                 </button>
             </div>
+
+            <div class="tabs-content-area">
 
             <!-- Device Info Tab -->
             <div class="tab-content" :class="{ active: activeTab === 'device-info' }">
@@ -968,9 +1011,15 @@
                         </button>
                     </div>
 
-                    <div class="terminal" v-if="serialActive">{{ serialOutput }}</div>
-                    <div v-else style="padding: 20px; text-align: center; color: #666; background: #2a2a2a; border-radius: 6px;">
-                        Click "Start Monitoring" to view serial output
+                    <!-- Always-visible terminal output -->
+                    <div class="terminal serial-monitor-output" style="min-height: 200px; max-height: 400px; overflow-y: auto; position: relative;">
+                        <pre v-if="serialOutput" style="margin:0; white-space: pre-wrap; word-break: break-all; color: inherit; font-family: inherit; font-size: inherit;">{{ serialOutput }}</pre>
+                        <div v-else style="color: #555; padding: 10px; font-style: italic;">Click "Start Monitoring" to view serial output...</div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 8px;" v-if="serialOutput">
+                        <button class="btn btn-secondary" @click="saveSerialLog" style="font-size: 12px; padding: 6px 14px;">
+                            <i class="fas fa-download"></i> Save Log
+                        </button>
                     </div>
 
                     <div style="margin-top: 15px;">
@@ -1153,6 +1202,10 @@
                     <div v-else style="padding: 20px; text-align: center; color: #666; background: #2a2a2a; border-radius: 6px; margin-top: 15px;">
                         Click "Load SPIFFS" to browse files
                     </div>
+
+                    <div v-if="spiffsMessage" style="padding: 12px 15px; color: #aaa; background: #2a2a2a; border-radius: 6px; margin-top: 10px; font-size: 13px;">
+                        <i class="fas fa-info-circle" style="color: #f7931a; margin-right: 8px;"></i>{{ spiffsMessage }}
+                    </div>
                 </div>
             </div>
 
@@ -1190,6 +1243,8 @@
                         Click "Detect Apps" to scan for installed applications
                     </div>
                 </div>
+            </div>
+
             </div>
         </div>
 
@@ -1301,6 +1356,7 @@
                     spiffsFiles: [],
                     spiffsLoadingProgress: 0,
                     spiffsLoading: false,
+                    spiffsMessage: '',
                     // Apps
                     detectedApps: [],
                     appsLoading: false,
@@ -1649,7 +1705,7 @@
                             this.serialOutput += value;
                             // Auto-scroll to bottom
                             this.$nextTick(() => {
-                                const el = this.$el?.querySelector('.serial-terminal');
+                                const el = this.$el?.querySelector('.serial-monitor-output');
                                 if (el) el.scrollTop = el.scrollHeight;
                             });
                         }
@@ -1686,6 +1742,17 @@
                     } catch (err) {
                         this.serialOutput += 'Error: ' + err.message + '\n';
                     }
+                },
+                saveSerialLog() {
+                    const blob = new Blob([this.serialOutput], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `serial-log-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
                 },
                 async readRegister() {
                     try {
@@ -1842,6 +1909,7 @@
                 async loadSPIFFS() {
                     this.spiffsLoading = true;
                     this.spiffsLoadingProgress = 0;
+                    this.spiffsMessage = '';
                     try {
                         const spiffsPart = this.partitions.find(p => p.type.toLowerCase() === 'data' || p.label.toLowerCase().includes('spiffs'));
                         if (!spiffsPart) { alert('SPIFFS partition not found'); return; }
@@ -1851,7 +1919,18 @@
                         if (window.SPIFFSParser) {
                             this.spiffsFiles = window.SPIFFSParser.parseFiles(new Uint8Array(spiffsData));
                         } else {
-                            this.spiffsFiles = [{ name: 'Parser not loaded - install spiffs-parser library for file listing', size: 0 }];
+                            // Auto-download raw partition for external analysis
+                            const blob = new Blob([spiffsData], { type: 'application/octet-stream' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${spiffsPart.label}-partition.bin`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            this.spiffsFiles = [];
+                            this.spiffsMessage = `Raw partition (${this.formatBytes(spiffsData.byteLength)}) downloaded as ${spiffsPart.label}-partition.bin. Use esptool.py or ESP-IDF to inspect files.`;
                         }
                         this.spiffsLoadingProgress = 100;
                         await this.logAudit('spiffs_inspect', 'SPIFFS partition inspected', this.deviceInfo.mac);
