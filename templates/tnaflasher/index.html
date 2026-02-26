@@ -738,6 +738,23 @@
         }
       },
 
+      async initData() {
+        // Build wallet options from user's wallets
+        this.walletOptions = this.g.user.wallets.map(w => ({
+          label: w.name,
+          value: w.id
+        }))
+        // Load all data
+        await this.loadStats()
+        await this.loadWallet()
+        await this.loadMiners()
+        await this.loadRequests()
+        await this.loadBulletins()
+        await this.loadPromoCodes()
+        await this.loadFeatureFlags()
+        await this.loadAuditLog()
+      },
+
       initUploadData(minerId) {
         if (!this.uploadData[minerId]) {
           this.uploadData[minerId] = {
@@ -1222,21 +1239,21 @@
     },
 
     async created() {
-      // Build wallet options from user's wallets
-      this.walletOptions = this.g.user.wallets.map(w => ({
-        label: w.name,
-        value: w.id
-      }))
+      // Wait for windowMixin to populate this.g.user before initializing
+      if (this.g?.user?.wallets?.length) {
+        await this.initData()
+      }
+    },
 
-      // Load all data
-      await this.loadStats()
-      await this.loadWallet()
-      await this.loadMiners()
-      await this.loadRequests()
-      await this.loadBulletins()
-      await this.loadPromoCodes()
-      await this.loadFeatureFlags()
-      await this.loadAuditLog()
+    watch: {
+      'g.user': {
+        async handler(val) {
+          if (val?.wallets?.length) {
+            await this.initData()
+          }
+        },
+        immediate: true
+      }
     }
   })
 
