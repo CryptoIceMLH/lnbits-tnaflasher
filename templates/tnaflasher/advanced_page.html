@@ -1055,6 +1055,7 @@
                         <div class="terminal">{{ detectionOutput || '(No output yet)' }}</div>
                     </div>
                 </div>
+            </div>
 
             <!-- Flash Tools Tab -->
             <div class="tab-content" :class="{ active: activeTab === 'flash-tools' }">
@@ -1264,6 +1265,7 @@
                     serialCommand: '',
                     serialPort: null,
                     serialReader: null,
+                    serialPipeAbort: null,
                     regAddress: '0x60007000',
                     regValue: null,
                     regWriteAddress: '',
@@ -1332,7 +1334,7 @@
                     window.location.href = window.location.origin + '/tnaflasher/' + WALLET_ID;
                 },
                 async safeReg(addr) {
-                    try { return await this.loader.readReg(addr); } catch(e) { return null; }
+                    try { return await this.loader.readRegister(addr); } catch(e) { return null; }
                 },
                 async connectDevice() {
                     try {
@@ -1623,9 +1625,13 @@
                         }
                         this.serialPort = this.loader.port;
 
+                        // Release stub's internal reader lock before piping
+                        await this.loader.releaseReaderWriter();
+
                         // Setup text decoder
                         const decoder = new TextDecoderStream();
-                        const readerPromise = this.serialPort.readable.pipeTo(decoder.writable);
+                        this.serialPipeAbort = new AbortController();
+                        this.serialPort.readable.pipeTo(decoder.writable, { signal: this.serialPipeAbort.signal }).catch(() => {});
                         this.serialReader = decoder.readable.getReader();
 
                         this.serialOutput += '[Listening for serial output...]\n';
@@ -1653,11 +1659,19 @@
                         }
                     }
                 },
-                stopSerialMonitor() {
+                async stopSerialMonitor() {
                     this.serialActive = false;
+                    if (this.serialPipeAbort) {
+                        this.serialPipeAbort.abort();
+                        this.serialPipeAbort = null;
+                    }
                     if (this.serialReader) {
-                        this.serialReader.cancel();
+                        await this.serialReader.cancel().catch(() => {});
                         this.serialReader = null;
+                    }
+                    // Restore the loader's internal reader so flash ops work again
+                    if (this.loader) {
+                        await this.loader.reconnect().catch(() => {});
                     }
                     this.serialOutput += '\n[Serial monitor stopped]\n';
                 },
@@ -1681,7 +1695,7 @@
                             alert('Invalid address. Use hex format e.g. 0x60007000');
                             return;
                         }
-                        const val = await this.loader.readReg(addr);
+                        const val = await this.loader.readRegister(addr);
                         this.regValue = '0x' + (val >>> 0).toString(16).toUpperCase().padStart(8, '0');
                     } catch (err) {
                         alert('Failed to read register: ' + err.message);
@@ -1700,7 +1714,7 @@
                             alert('Invalid address or value format');
                             return;
                         }
-                        await this.loader.writeReg(addr, val);
+                        await this.loader.writeRegister(addr, val);
                         alert('Register written successfully');
                         this.regWriteWarning = false;
                         await this.logAudit('register_write', `Wrote register 0x${addr.toString(16)} = 0x${val.toString(16)}`, this.deviceInfo.mac);
