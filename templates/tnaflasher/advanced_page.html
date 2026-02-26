@@ -1262,6 +1262,8 @@
                     serialActive: false,
                     serialOutput: '',
                     serialCommand: '',
+                    serialPort: null,
+                    serialReader: null,
                     regAddress: '0x60007000',
                     regValue: null,
                     regWriteAddress: '',
@@ -1385,16 +1387,13 @@
                         const features = ['Wi-Fi', 'BLE', 'Dual Core', '240 MHz'];
                         this.deviceInfo.features = features;
 
-                        // --- MAC Address --- use stub loader's chipMac property
+                        // --- MAC Address --- use getMacAddress() method
                         try {
                             let macStr = 'N/A';
-                            if (this.loader.chipMac && this.loader.chipMac.length >= 6) {
-                                macStr = Array.from(this.loader.chipMac).map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
-                            } else if (typeof this.loader.mac_addr === 'function') {
-                                const macArr = await this.loader.mac_addr();
-                                macStr = Array.from(macArr).map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+                            if (typeof this.loader.getMacAddress === 'function') {
+                                macStr = await this.loader.getMacAddress();
                             }
-                            this.deviceInfo.mac = macStr;
+                            this.deviceInfo.mac = macStr || 'N/A';
                         } catch(e) {
                             this.deviceInfo.mac = 'N/A';
                         }
@@ -1406,10 +1405,15 @@
 
                         // --- Flash size ---
                         try {
-                            const flashSize = await this.loader.detectFlashSize();
-                            this.deviceInfo.flashSize = flashSize || 'Unknown';
+                            const sizeBytes = await this.loader.detectFlashSize();
+                            if (sizeBytes) {
+                                const sizeMB = sizeBytes / (1024 * 1024);
+                                this.deviceInfo.flashSize = `${sizeMB} MB (${sizeBytes} bytes)`;
+                            } else {
+                                this.deviceInfo.flashSize = 'Unknown';
+                            }
                         } catch(e) {
-                            this.deviceInfo.flashSize = 'Unable to detect';
+                            this.deviceInfo.flashSize = 'Unknown';
                         }
 
                         // --- Security Info ---
@@ -1609,19 +1613,53 @@
                 },
                 async startSerialMonitor() {
                     this.serialActive = true;
-                    this.serialOutput = 'Serial monitor started at ' + this.baudRate + ' baud\nNote: This reads from the device connection. Reconnect device to see boot output.\n';
+                    this.serialOutput = `[Serial monitor started at ${this.baudRate} baud]\n`;
                     try {
-                        // Read available data from transport if possible
-                        if (this.transport && this.transport.reader) {
-                            this.serialOutput += 'Listening for serial output...\n';
+                        // Get port from loader
+                        if (!this.loader || !this.loader.port) {
+                            this.serialOutput += '[Error: Device not connected]\n';
+                            this.serialActive = false;
+                            return;
                         }
+                        this.serialPort = this.loader.port;
+
+                        // Setup text decoder
+                        const decoder = new TextDecoderStream();
+                        const readerPromise = this.serialPort.readable.pipeTo(decoder.writable);
+                        this.serialReader = decoder.readable.getReader();
+
+                        this.serialOutput += '[Listening for serial output...]\n';
+                        this.readSerialLoop();
                     } catch (err) {
-                        this.serialOutput += 'Serial monitor error: ' + err.message + '\n';
+                        this.serialOutput += `[Error: ${err.message}]\n`;
+                        this.serialActive = false;
+                    }
+                },
+                async readSerialLoop() {
+                    try {
+                        while (this.serialActive && this.serialReader) {
+                            const { value, done } = await this.serialReader.read();
+                            if (done) break;
+                            this.serialOutput += value;
+                            // Auto-scroll to bottom
+                            this.$nextTick(() => {
+                                const el = this.$el?.querySelector('.serial-terminal');
+                                if (el) el.scrollTop = el.scrollHeight;
+                            });
+                        }
+                    } catch(e) {
+                        if (this.serialActive) {
+                            this.serialOutput += `\n[Read error: ${e.message}]\n`;
+                        }
                     }
                 },
                 stopSerialMonitor() {
                     this.serialActive = false;
-                    this.serialOutput += '\nSerial monitor stopped\n';
+                    if (this.serialReader) {
+                        this.serialReader.cancel();
+                        this.serialReader = null;
+                    }
+                    this.serialOutput += '\n[Serial monitor stopped]\n';
                 },
                 async sendSerialCommand() {
                     if (!this.serialActive || !this.serialCommand) return;
