@@ -1338,11 +1338,8 @@
                             error: (...a) => console.error(...a),
                         };
 
-                        // Request port with supported USB vendor IDs (Espressif, CH340, CP210x, FTDI)
-                        const port = await navigator.serial.requestPort({ filters: [
-                            { usbVendorId: 0x303a }, { usbVendorId: 0x1a86 },
-                            { usbVendorId: 0x10c4 }, { usbVendorId: 0x0403 },
-                        ]});
+                        // No filters — show all serial ports (same as main page)
+                        const port = await navigator.serial.requestPort();
                         await port.open({ baudRate: 115200 });
 
                         // Create loader directly (ESPConnect pattern)
