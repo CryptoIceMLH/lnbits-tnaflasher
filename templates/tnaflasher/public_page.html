@@ -220,17 +220,9 @@
       <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
       <p class="text-subtitle1 text-tna-secondary">Pay with Lightning - Flash your BTC tools</p>
       <div class="q-mt-sm">
-        <q-btn
-          flat
-          dense
-          outline
-          size="sm"
-          icon="build"
-          label="Advanced Tools"
-          class="text-tna-muted"
-          style="border-color: var(--border); opacity: 0.7;"
-          @click="window.location.href = advancedUrl"
-        />
+        <a href="javascript:void(0)" @click.prevent="window.location.href = advancedUrl" style="color: var(--text-tna-muted); font-size: 13px; cursor: pointer; text-decoration: none; border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; white-space: nowrap; display: inline-block;">
+          ⚙ Advanced Tools
+        </a>
       </div>
     </div>
 

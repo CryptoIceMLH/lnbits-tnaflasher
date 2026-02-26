@@ -673,8 +673,20 @@
           { name: 'amount_sats', label: 'Amount', field: 'amount_sats', align: 'right' },
           { name: 'status', label: 'Status', field: 'status', align: 'center' },
         ],
-        // Feature Toggles
-        featureFlags: {},
+        // Feature Toggles (pre-populated with defaults)
+        featureFlags: {
+          feature_advanced_page: true,
+          feature_device_info: true,
+          feature_partitions: true,
+          feature_backup: true,
+          feature_filesystem_read: true,
+          feature_filesystem_write: true,
+          feature_serial_monitor: true,
+          feature_firmware_detection: true,
+          feature_register_read: true,
+          feature_register_write: true,
+          feature_audit_logging: true,
+        },
         savingFeature: false,
         dashboardTab: 'requests',
         // Audit Log
@@ -1147,10 +1159,10 @@
             '/tnaflasher/api/v1/feature-flags',
             null
           )
-          this.featureFlags = res
+          // Merge response into existing flags (don't replace to avoid triggering watchers)
+          Object.assign(this.featureFlags, res)
         } catch (e) {
           console.error('Failed to load feature flags:', e)
-          this.featureFlags = {}
         }
       },
 
