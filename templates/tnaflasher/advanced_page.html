@@ -1796,12 +1796,9 @@
                         // Step 1: save port reference before disconnecting
                         const port = this.loader.port;
 
-                        // Step 2: disconnect stub protocol
-                        this.serialOutput += '[Disconnecting flash stub to allow firmware to boot...]\n';
-                        await this.loader.disconnect();
-
-                        // Step 3: send RTS hardware reset pulse (port still open at this point)
+                        // Step 2: send RTS hardware reset pulse BEFORE disconnecting (port must be open)
                         try {
+                            this.serialOutput += '[Sending reset pulse...\n';
                             await port.setSignals({ dataTerminalReady: false, requestToSend: true });
                             await new Promise(r => setTimeout(r, 100));
                             await port.setSignals({ dataTerminalReady: false, requestToSend: false });
@@ -1809,6 +1806,10 @@
                         } catch(e) {
                             this.serialOutput += `[RTS reset failed: ${e.message} — manually reset device]\n`;
                         }
+
+                        // Step 3: disconnect stub protocol (closes port)
+                        this.serialOutput += '[Disconnecting flash stub...]\n';
+                        await this.loader.disconnect();
 
                         // Step 4: null the loader (it's dead now)
                         this.loader = null;
