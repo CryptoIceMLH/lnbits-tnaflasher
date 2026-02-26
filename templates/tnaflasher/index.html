@@ -814,11 +814,18 @@
             '/tnaflasher/api/v1/admin/miners',
             this.g.user.wallets[0].adminkey
           )
-          this.miners = response.data.miners || []
+          const miners = response.data.miners || []
 
-          // Initialize upload data and load firmware for each miner
-          for (const miner of this.miners) {
+          // Pre-populate uploadData for ALL miners before Vue re-renders
+          for (const miner of miners) {
             this.initUploadData(miner.id)
+          }
+
+          // Now safe to assign — template will find uploadData[miner.id] ready
+          this.miners = miners
+
+          // Load firmware async (non-blocking for render)
+          for (const miner of miners) {
             await this.loadMinerFirmware(miner.id)
           }
         } catch (e) {
