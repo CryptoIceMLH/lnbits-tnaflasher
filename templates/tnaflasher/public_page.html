@@ -219,7 +219,7 @@
       <img src="/tnaflasher/static/images/btc-logo.png" alt="BTC" style="height: 80px; margin-bottom: 16px;">
       <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
       <p class="text-subtitle1 text-tna-secondary">Pay with Lightning - Flash your BTC tools</p>
-      <div class="q-mt-sm">
+      <div class="q-mt-sm" v-if="showAdvanced">
         <a href="javascript:void(0)" @click="goToAdvanced()" style="color: #39ff14; font-size: 13px; cursor: pointer; text-decoration: none; border: 1px solid #39ff14; padding: 6px 12px; border-radius: 6px; white-space: nowrap; display: inline-block;">
           ⚙ Advanced Tools
         </a>
@@ -616,6 +616,9 @@
           isChromium: !!navigator.serial,
           browserWarningDismissed: false,
 
+          // Feature flags
+          showAdvanced: true,
+
           // News/Bulletins
           bulletins: [],
 
@@ -711,6 +714,17 @@
 
         advancedUrl() {
           return window.location.origin + '/tnaflasher/' + WALLET_ID + '/advanced'
+        }
+      },
+
+      async created() {
+        try {
+          const res = await fetch('/tnaflasher/api/v1/feature-flags');
+          const flags = await res.json();
+          this.showAdvanced = flags.feature_advanced_page !== false;
+        } catch (err) {
+          console.error('Failed to load feature flags:', err);
+          this.showAdvanced = true;
         }
       },
 
