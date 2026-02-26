@@ -1205,17 +1205,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.umd.prod.js"></script>
-    <script type="module">
-        import { ESPLoader, connect } from 'https://cdn.jsdelivr.net/npm/tasmota-webserial-esptool/dist/index.js';
-        window.ESPLoader = ESPLoader;
-        window.espConnect = connect;
-        // Also load NVS and SPIFFS parsers
-        const nvsModule = await import('https://cdn.jsdelivr.net/npm/nvs-parser@1.0.0/dist/index.esm.js').catch(() => null);
-        const spiffsModule = await import('https://cdn.jsdelivr.net/npm/spiffs-parser@1.0.0/dist/index.esm.js').catch(() => null);
-        window.NVSParser = nvsModule?.NVSParser || null;
-        window.SPIFFSParser = spiffsModule?.SPIFFSParser || null;
-    </script>
-
     <script>
         const { createApp } = Vue;
 
@@ -1341,10 +1330,30 @@
                 },
                 async connectDevice() {
                     try {
-                        // Use tasmota's connect function which requests the port internally
-                        this.loader = await window.espConnect(null);
+                        // Dynamic import on click — correct web bundle, no 404s
+                        const { connect } = await import('https://cdn.jsdelivr.net/npm/tasmota-webserial-esptool@9.2.20/dist/web/index.js');
+
+                        // Must pass real logger object (null crashes internally)
+                        const logger = {
+                            log:   (...a) => console.log(...a),
+                            debug: (...a) => console.debug(...a),
+                            error: (...a) => console.error(...a),
+                        };
+
+                        // connect() calls navigator.serial.requestPort() internally
+                        this.loader = await connect(logger);
+
+                        // initialize() syncs with ROM, detectChip() populates chipName
                         await this.loader.initialize();
-                        const chipName = this.loader.chip?.CHIP_NAME || 'Unknown';
+                        await this.loader.detectChip();
+
+                        // Load optional parsers (non-blocking)
+                        const nvsModule = await import('https://cdn.jsdelivr.net/npm/nvs-parser@1.0.0/dist/index.esm.js').catch(() => null);
+                        const spiffsModule = await import('https://cdn.jsdelivr.net/npm/spiffs-parser@1.0.0/dist/index.esm.js').catch(() => null);
+                        window.NVSParser = nvsModule?.NVSParser || null;
+                        window.SPIFFSParser = spiffsModule?.SPIFFSParser || null;
+
+                        const chipName = this.loader.chipName || 'Unknown';
 
                         this.isConnected = true;
                         this.activeTab = 'device-info';
@@ -1524,9 +1533,7 @@
                 },
                 disconnectDevice() {
                     if (this.loader) {
-                        try {
-                            this.loader.disconnect();
-                        } catch(e) {}
+                        this.loader.disconnect().catch(() => {});
                     }
                     this.isConnected = false;
                     this.serialActive = false;
