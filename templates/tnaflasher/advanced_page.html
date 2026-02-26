@@ -986,13 +986,23 @@
                             enableTracing: false,
                             debugLogging: false,
                         });
-                        await this.loader.main();
+                        const chipName = await this.loader.main();
 
                         this.isConnected = true;
                         this.activeTab = 'device-info';
 
                         // Read device info
-                        this.deviceInfo.chipName = this.loader.chipName || 'Unknown';
+                        this.deviceInfo.chipName = chipName || 'Unknown';
+
+                        try {
+                            const flashSize = await this.loader.detectFlashSize();
+                            this.deviceInfo.flashSize = flashSize;
+                        } catch (e) {
+                            this.deviceInfo.flashSize = 'Unable to detect';
+                        }
+
+                        this.deviceInfo.psram = 'N/A';
+                        this.deviceInfo.crystal = '40 MHz';
 
                         try {
                             const mac = await this.loader.readMac();
@@ -1001,14 +1011,11 @@
                             this.deviceInfo.mac = 'Unable to read';
                         }
 
-                        this.deviceInfo.flashSize = '16 MB'; // Default, would need to detect from chip
-                        this.deviceInfo.psram = 'Detecting...';
-                        this.deviceInfo.crystal = '40 MHz';
-
                         // Read partitions
                         await this.readPartitions();
                     } catch (err) {
                         alert('Failed to connect: ' + err.message);
+                        this.isConnected = false;
                     }
                 },
                 disconnectDevice() {
@@ -1021,7 +1028,7 @@
                 async readPartitions() {
                     try {
                         // Read partition table from 0x8000
-                        const partTableData = await this.loader.readFlash({ offset: 0x8000, length: 0x1000, progress: () => {} });
+                        const partTableData = await this.loader.readFlash(0x8000, 0x1000);
                         const partitions = this.parsePartitionTable(new Uint8Array(partTableData));
                         this.partitions = partitions;
                     } catch (err) {
@@ -1086,11 +1093,34 @@
                 selectFile(e) {
                     this.selectedFile = e.target.files[0];
                 },
-                uploadFile() {
-                    alert('File upload not yet implemented');
+                async uploadFile() {
+                    if (!this.selectedFile || !this.selectedPartition) {
+                        alert('Please select a file and partition');
+                        return;
+                    }
+                    try {
+                        const reader = new FileReader();
+                        reader.onload = async (e) => {
+                            try {
+                                const data = new Uint8Array(e.target.result);
+                                const partition = this.partitions.find(p => p.label === this.selectedPartition);
+                                if (!partition) {
+                                    alert('Partition not found');
+                                    return;
+                                }
+                                alert('File upload not yet fully implemented - requires write flash capability');
+                                await this.logAudit('file_upload_attempt', `Attempted upload to ${partition.label}`, this.deviceInfo.mac);
+                            } catch (err) {
+                                alert('Upload failed: ' + err.message);
+                            }
+                        };
+                        reader.readAsArrayBuffer(this.selectedFile);
+                    } catch (err) {
+                        alert('File read failed: ' + err.message);
+                    }
                 },
-                downloadFile(name) {
-                    alert('File download not yet implemented');
+                async downloadFile(name) {
+                    alert('File download requires filesystem parsing - not yet fully implemented');
                 },
                 async downloadFullFlash() {
                     this.backupProgress = 0;
@@ -1100,7 +1130,7 @@
                         let data = new Uint8Array();
 
                         for (let offset = 0; offset < totalSize; offset += chunkSize) {
-                            const chunk = await this.loader.readFlash({ offset, length: Math.min(chunkSize, totalSize - offset), progress: () => {} });
+                            const chunk = await this.loader.readFlash(offset, Math.min(chunkSize, totalSize - offset));
                             data = new Uint8Array([...data, ...new Uint8Array(chunk)]);
                             this.backupProgress = Math.round((offset / totalSize) * 100);
                         }
@@ -1116,8 +1146,27 @@
                         this.backupProgress = 0;
                     }
                 },
-                downloadPartition() {
-                    alert('Partition backup not yet implemented');
+                async downloadPartition() {
+                    if (!this.selectedBackupPartition) {
+                        alert('Please select a partition');
+                        return;
+                    }
+                    try {
+                        const partition = this.partitions.find(p => p.label === this.selectedBackupPartition);
+                        if (!partition) {
+                            alert('Partition not found');
+                            return;
+                        }
+                        this.partitionBackupProgress = 0;
+                        const data = await this.loader.readFlash(partition.offset, partition.size);
+                        this.downloadBinary(data, `${partition.label}_backup.bin`);
+                        this.partitionBackupProgress = 100;
+                        setTimeout(() => this.partitionBackupProgress = 0, 1000);
+                        await this.logAudit('partition_backup', `Backed up partition: ${partition.label}`, this.deviceInfo.mac);
+                    } catch (err) {
+                        alert('Partition backup failed: ' + err.message);
+                        this.partitionBackupProgress = 0;
+                    }
                 },
                 downloadBinary(data, filename) {
                     const blob = new Blob([data], { type: 'application/octet-stream' });
@@ -1128,39 +1177,105 @@
                     a.click();
                     URL.revokeObjectURL(url);
                 },
-                startSerialMonitor() {
+                async startSerialMonitor() {
                     this.serialActive = true;
-                    this.serialOutput = 'Serial monitor started at ' + this.baudRate + ' baud\n';
+                    this.serialOutput = 'Serial monitor started at ' + this.baudRate + ' baud\nNote: This reads from the device connection. Reconnect device to see boot output.\n';
+                    try {
+                        // Read available data from transport if possible
+                        if (this.transport && this.transport.reader) {
+                            this.serialOutput += 'Listening for serial output...\n';
+                        }
+                    } catch (err) {
+                        this.serialOutput += 'Serial monitor error: ' + err.message + '\n';
+                    }
                 },
                 stopSerialMonitor() {
                     this.serialActive = false;
+                    this.serialOutput += '\nSerial monitor stopped\n';
                 },
-                sendSerialCommand() {
-                    this.serialOutput += '> ' + this.serialCommand + '\n';
-                    this.serialCommand = '';
+                async sendSerialCommand() {
+                    if (!this.serialActive || !this.serialCommand) return;
+                    try {
+                        // This would require the transport to be in a listening state after main()
+                        // For now, log that command sending requires device to be listening
+                        this.serialOutput += '> ' + this.serialCommand + '\n';
+                        this.serialOutput += 'Note: Command sending requires device to be in listening mode after disconnecting from esp-tool\n';
+                        this.serialCommand = '';
+                    } catch (err) {
+                        this.serialOutput += 'Error: ' + err.message + '\n';
+                    }
                 },
                 async readRegister() {
                     try {
                         const addr = parseInt(this.regAddress, 16);
-                        this.regValue = Math.floor(Math.random() * 0xffffffff); // Placeholder
+                        if (isNaN(addr)) {
+                            alert('Invalid address format');
+                            return;
+                        }
+                        this.regValue = await this.loader.readReg(addr);
                     } catch (err) {
-                        alert('Invalid address format');
+                        alert('Failed to read register: ' + err.message);
                     }
                 },
-                writeRegister() {
-                    this.regWriteWarning = true;
-                    alert('Register write confirmation needed - not yet implemented');
+                async writeRegister() {
+                    if (!this.regWriteWarning) {
+                        this.regWriteWarning = true;
+                        alert('Warning: Register writes can damage your device! Confirm by clicking Write again.');
+                        return;
+                    }
+                    try {
+                        const addr = parseInt(this.regWriteAddress, 16);
+                        const val = parseInt(this.regWriteValue, 16);
+                        if (isNaN(addr) || isNaN(val)) {
+                            alert('Invalid address or value format');
+                            return;
+                        }
+                        await this.loader.writeReg(addr, val);
+                        alert('Register written successfully');
+                        this.regWriteWarning = false;
+                        await this.logAudit('register_write', `Wrote register 0x${addr.toString(16)} = 0x${val.toString(16)}`, this.deviceInfo.mac);
+                    } catch (err) {
+                        alert('Failed to write register: ' + err.message);
+                    }
                 },
                 async detectFirmware() {
                     this.detectProgress = true;
                     this.detectionOutput = 'Scanning for firmware...\n';
                     this.detectionAttempted = false;
+                    this.detectedFirmware = null;
 
-                    setTimeout(() => {
+                    try {
+                        // Try to detect via flash ID first
+                        try {
+                            const flashId = await this.loader.readFlashId();
+                            this.detectionOutput += `Flash ID: 0x${flashId.toString(16)}\n`;
+                        } catch (e) {
+                            this.detectionOutput += 'Flash ID detection not supported\n';
+                        }
+
+                        // Read boot loader from 0x0 and app from 0x1000 to detect firmware type
+                        try {
+                            const appData = await this.loader.readFlash(0x1000, 256);
+                            const view = new DataView(appData.buffer);
+
+                            // Check for common firmware magic bytes
+                            if (view.getUint8(0) === 0xe9) {
+                                this.detectionOutput += 'Valid ESP firmware image detected\n';
+                                this.detectedFirmware = { name: 'ESP Firmware', version: 'Unknown' };
+                            }
+                        } catch (e) {
+                            this.detectionOutput += 'Unable to read firmware region\n';
+                        }
+
                         this.detectionOutput += 'Scan complete.\n';
-                        this.detectProgress = false;
                         this.detectionAttempted = true;
-                    }, 3000);
+                        await this.logAudit('firmware_detection', 'Firmware scan performed', this.deviceInfo.mac);
+                    } catch (err) {
+                        this.detectionOutput += 'Detection failed: ' + err.message + '\n';
+                        this.detectionAttempted = true;
+                    } finally {
+                        this.detectProgress = false;
+                    }
                 },
                 async loadFeatureFlags() {
                     try {
