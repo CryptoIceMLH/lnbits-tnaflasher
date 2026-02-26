@@ -1169,7 +1169,7 @@
             null
           )
           // Merge response into existing flags (don't replace to avoid triggering watchers)
-          Object.assign(this.featureFlags, res)
+          Object.assign(this.featureFlags, res.data)
         } catch (e) {
           console.error('Failed to load feature flags:', e)
         }
