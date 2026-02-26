@@ -228,7 +228,7 @@
 
     <div class="row q-col-gutter-md justify-center">
       <!-- Main Flasher Column -->
-      <div class="col-12 col-lg-7">
+      <div class="col-12 col-md-8 col-lg-5">
 
         <!-- Wallet Error -->
         <q-banner v-if="walletError" class="bg-negative text-white q-mb-md" rounded>
@@ -541,9 +541,9 @@
 
       </div>
 
-      <!-- Sidebar Column - News/Bulletins -->
-      <div v-if="bulletins.length > 0" class="col-12 col-lg-3">
-        <q-card class="tna-card bulletin-board" style="position: sticky; top: 16px;">
+      <!-- Sidebar Column - News/Bulletins (Below on mobile, side on desktop) -->
+      <div v-if="bulletins.length > 0" class="col-12">
+        <q-card class="tna-card bulletin-board">
           <q-card-section class="q-pa-sm">
             <div class="text-subtitle2 text-tna-primary q-mb-xs">News</div>
             <div style="max-height: 340px; overflow-y: auto;">
