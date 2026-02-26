@@ -626,32 +626,169 @@
 
             <!-- Device Info Tab -->
             <div class="tab-content" :class="{ active: activeTab === 'device-info' }">
+                <!-- Basic Info -->
                 <div class="tab-section">
-                    <div class="tab-section-title">Device Specifications</div>
+                    <div class="tab-section-title">Basic Information</div>
                     <div class="info-grid">
                         <div class="info-box">
-                            <div class="info-box-label">Chip Name</div>
+                            <div class="info-box-label">Chip</div>
                             <div class="info-box-value">{{ deviceInfo.chipName || 'Unknown' }}</div>
                         </div>
                         <div class="info-box">
-                            <div class="info-box-label">MAC Address</div>
-                            <div class="info-box-value">{{ deviceInfo.mac || 'N/A' }}</div>
+                            <div class="info-box-label">Revision</div>
+                            <div class="info-box-value">{{ deviceInfo.revision || 'N/A' }}</div>
                         </div>
+                        <div class="info-box">
+                            <div class="info-box-label">MAC Address</div>
+                            <div class="info-box-value" style="font-family: monospace; font-size: 12px;">{{ deviceInfo.mac || 'Unable to read' }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Flash & Clock -->
+                <div class="tab-section">
+                    <div class="tab-section-title">Flash & Clock</div>
+                    <div class="info-grid">
                         <div class="info-box">
                             <div class="info-box-label">Flash Size</div>
                             <div class="info-box-value">{{ deviceInfo.flashSize || 'N/A' }}</div>
-                        </div>
-                        <div class="info-box">
-                            <div class="info-box-label">PSRAM</div>
-                            <div class="info-box-value">{{ deviceInfo.psram || 'None' }}</div>
                         </div>
                         <div class="info-box">
                             <div class="info-box-label">Crystal Frequency</div>
                             <div class="info-box-value">{{ deviceInfo.crystal || 'N/A' }}</div>
                         </div>
                         <div class="info-box">
-                            <div class="info-box-label">Security Version</div>
-                            <div class="info-box-value">{{ deviceInfo.security || 'N/A' }}</div>
+                            <div class="info-box-label">CPU Cores</div>
+                            <div class="info-box-value">{{ deviceInfo.cpuCores || 'N/A' }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">Max CPU Frequency</div>
+                            <div class="info-box-value">{{ deviceInfo.maxCpuFreq || 'N/A' }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Embedded Memory -->
+                <div class="tab-section">
+                    <div class="tab-section-title">Embedded Memory</div>
+                    <div class="info-grid">
+                        <div class="info-box">
+                            <div class="info-box-label">PSRAM</div>
+                            <div class="info-box-value">{{ deviceInfo.psram || 'None' }}</div>
+                        </div>
+                        <div v-if="deviceInfo.psramVendor" class="info-box">
+                            <div class="info-box-label">PSRAM Vendor</div>
+                            <div class="info-box-value">{{ deviceInfo.psramVendor }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Flash Details -->
+                <div class="tab-section">
+                    <div class="tab-section-title">Flash Details</div>
+                    <div class="info-grid">
+                        <div v-if="deviceInfo.flashId" class="info-box">
+                            <div class="info-box-label">Flash ID</div>
+                            <div class="info-box-value" style="font-family: monospace; font-size: 12px;">{{ deviceInfo.flashId }}</div>
+                        </div>
+                        <div v-if="deviceInfo.flashManufacturer" class="info-box">
+                            <div class="info-box-label">Manufacturer</div>
+                            <div class="info-box-value">{{ deviceInfo.flashManufacturer }}</div>
+                        </div>
+                        <div v-if="deviceInfo.flashDevice" class="info-box">
+                            <div class="info-box-label">Device</div>
+                            <div class="info-box-value">{{ deviceInfo.flashDevice }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Package & Revision -->
+                <div class="tab-section">
+                    <div class="tab-section-title">Package & Revision</div>
+                    <div class="info-grid">
+                        <div v-if="deviceInfo.chipVariant" class="info-box">
+                            <div class="info-box-label">Chip Variant</div>
+                            <div class="info-box-value">{{ deviceInfo.chipVariant }}</div>
+                        </div>
+                        <div v-if="deviceInfo.pkgFormFactor" class="info-box">
+                            <div class="info-box-label">Package Form Factor</div>
+                            <div class="info-box-value">{{ deviceInfo.pkgFormFactor }}</div>
+                        </div>
+                        <div v-if="deviceInfo.revision" class="info-box">
+                            <div class="info-box-label">Revision</div>
+                            <div class="info-box-value">{{ deviceInfo.revision }}</div>
+                        </div>
+                        <div v-if="deviceInfo.maxCpuFreq" class="info-box">
+                            <div class="info-box-label">Max CPU Frequency</div>
+                            <div class="info-box-value">{{ deviceInfo.maxCpuFreq }}</div>
+                        </div>
+                        <div v-if="deviceInfo.cpuCores" class="info-box">
+                            <div class="info-box-label">CPU Cores</div>
+                            <div class="info-box-value">{{ deviceInfo.cpuCores }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Features -->
+                <div v-if="deviceInfo.features && deviceInfo.features.length" class="tab-section">
+                    <div class="tab-section-title">Feature Set</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <div v-for="(feature, idx) in deviceInfo.features" :key="idx" style="background: rgba(255, 107, 53, 0.1); border: 1px solid #ff6b35; padding: 8px 12px; border-radius: 4px; font-size: 13px;">
+                            {{ feature }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security -->
+                <div class="tab-section">
+                    <div class="tab-section-title">Security</div>
+                    <div class="info-grid">
+                        <div v-if="deviceInfo.efuseBlockVersion" class="info-box">
+                            <div class="info-box-label">eFuse Block Version</div>
+                            <div class="info-box-value">{{ deviceInfo.efuseBlockVersion }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">Flash Encryption</div>
+                            <div class="info-box-value">{{ deviceInfo.flashEncryption || 'Unable to read' }}</div>
+                        </div>
+                        <div v-if="deviceInfo.flashEncryptionDetails" class="info-box">
+                            <div class="info-box-label">Flash Encryption Details</div>
+                            <div class="info-box-value" style="font-family: monospace; font-size: 12px;">{{ deviceInfo.flashEncryptionDetails }}</div>
+                        </div>
+                        <div v-if="deviceInfo.flashEncryptionMode" class="info-box">
+                            <div class="info-box-label">Flash Encryption Mode</div>
+                            <div class="info-box-value">{{ deviceInfo.flashEncryptionMode }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">Secure Boot</div>
+                            <div class="info-box-value">{{ deviceInfo.secureBoot || 'Unable to read' }}</div>
+                        </div>
+                        <div v-if="deviceInfo.secureBootType" class="info-box">
+                            <div class="info-box-label">Secure Boot Type</div>
+                            <div class="info-box-value">{{ deviceInfo.secureBootType }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">JTAG Protection</div>
+                            <div class="info-box-value">{{ deviceInfo.jtagProtection || 'Unable to read' }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">USB Protection</div>
+                            <div class="info-box-value">{{ deviceInfo.usbProtection || 'Unable to read' }}</div>
+                        </div>
+                        <div v-if="deviceInfo.securityNote" class="info-box" style="grid-column: 1 / -1;">
+                            <div class="info-box-label">Security Note</div>
+                            <div class="info-box-value" style="font-size: 12px;">{{ deviceInfo.securityNote }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Connection -->
+                <div v-if="deviceInfo.baudRate" class="tab-section">
+                    <div class="tab-section-title">Connection</div>
+                    <div class="info-grid">
+                        <div class="info-box">
+                            <div class="info-box-label">Baud Rate</div>
+                            <div class="info-box-value">{{ deviceInfo.baudRate }}</div>
                         </div>
                     </div>
                 </div>
@@ -920,12 +1057,43 @@
                     isConnected: false,
                     activeTab: 'device-info',
                     deviceInfo: {
+                        // Basic
                         chipName: '',
+                        description: '',
+                        revision: '',
                         mac: '',
+                        // Flash & Clock
                         flashSize: '',
-                        psram: '',
+                        flashId: '',
+                        flashManufacturer: '',
+                        flashDevice: '',
                         crystal: '',
-                        security: ''
+                        // CPU
+                        cpuCores: '',
+                        maxCpuFreq: '',
+                        // Memory
+                        psram: '',
+                        psramVendor: '',
+                        // Package
+                        pkgVersion: '',
+                        chipVariant: '',
+                        pkgFormFactor: '',
+                        majorVersion: '',
+                        minorVersion: '',
+                        // Features
+                        features: [],
+                        // Security
+                        efuseBlockVersion: '',
+                        flashEncryption: '',
+                        flashEncryptionDetails: '',
+                        flashEncryptionMode: '',
+                        secureBoot: '',
+                        secureBootType: '',
+                        jtagProtection: '',
+                        usbProtection: '',
+                        securityNote: '',
+                        // Connection
+                        baudRate: '',
                     },
                     partitions: [],
                     files: [],
@@ -975,14 +1143,17 @@
                 goBack() {
                     window.location.href = window.location.origin + '/tnaflasher/' + WALLET_ID;
                 },
+                async safeReg(addr) {
+                    try { return await this.loader.readReg(addr); } catch(e) { return null; }
+                },
                 async connectDevice() {
                     try {
                         const port = await navigator.serial.requestPort();
                         this.transport = new window.Transport(port, true);
                         this.loader = new window.ESPLoader({
                             transport: this.transport,
-                            baudrate: 115200,
-                            romBaudrate: 115200,
+                            baudrate: parseInt(this.baudRate),
+                            romBaudrate: parseInt(this.baudRate),
                             enableTracing: false,
                             debugLogging: false,
                         });
@@ -990,25 +1161,171 @@
 
                         this.isConnected = true;
                         this.activeTab = 'device-info';
-
-                        // Read device info
                         this.deviceInfo.chipName = chipName || 'Unknown';
+                        this.deviceInfo.baudRate = parseInt(this.baudRate).toLocaleString() + ' bps';
 
+                        // --- ESP32-S3 register constants ---
+                        const EFUSE_BASE      = 0x60007000;
+                        const MAC_EFUSE_REG   = EFUSE_BASE + 0x044;
+                        const EFUSE_BLK1      = EFUSE_BASE + 0x44;
+                        const EFUSE_BLK2      = EFUSE_BASE + 0x5c;
+
+                        // --- Package & Revision ---
+                        const reg_blk1_3 = await this.safeReg(EFUSE_BLK1 + 4 * 3);
+                        const reg_blk1_5 = await this.safeReg(EFUSE_BLK1 + 4 * 5);
+                        const reg_blk2_4 = await this.safeReg(EFUSE_BLK2 + 4 * 4);
+
+                        let pkgVersion = null, majorVersion = null, minorVersion = null;
+                        let blkMajor = null, blkMinor = null;
+                        if (reg_blk1_3 !== null && reg_blk1_5 !== null && reg_blk2_4 !== null) {
+                            pkgVersion   = (reg_blk1_3 >> 21) & 0x07;
+                            blkMajor     = (reg_blk2_4 >> 0) & 0x03;
+                            blkMinor     = (reg_blk1_3 >> 24) & 0x07;
+                            const rawMinorHi  = (reg_blk1_5 >> 23) & 0x01;
+                            const rawMinorLow = (reg_blk1_3 >> 18) & 0x07;
+                            const rawMinor    = (rawMinorHi << 3) + rawMinorLow;
+                            const rawMajor    = (reg_blk1_5 >> 24) & 0x03;
+                            const isEco0 = (rawMinor & 0x7) === 0 && blkMajor === 1 && blkMinor === 1;
+                            majorVersion = isEco0 ? 0 : rawMajor;
+                            minorVersion = isEco0 ? 0 : rawMinor;
+                        }
+
+                        const pkgNames  = { 0: 'ESP32-S3 (QFN56)', 1: 'ESP32-S3-PICO-1 (LGA56)' };
+                        const pkgForms  = { 0: '56-pin QFN (7 mm x 7 mm)', 1: 'LGA56' };
+                        const chipVariant  = pkgVersion !== null ? (pkgNames[pkgVersion]  || 'ESP32-S3') : 'ESP32-S3';
+                        const pkgFormFactor = pkgVersion !== null ? (pkgForms[pkgVersion] || 'Unknown')  : 'Unknown';
+                        this.deviceInfo.chipVariant   = chipVariant;
+                        this.deviceInfo.pkgFormFactor = pkgFormFactor;
+                        this.deviceInfo.pkgVersion    = pkgVersion !== null ? String(pkgVersion) : 'N/A';
+                        this.deviceInfo.majorVersion  = majorVersion !== null ? String(majorVersion) : 'N/A';
+                        this.deviceInfo.minorVersion  = minorVersion !== null ? String(minorVersion) : 'N/A';
+                        this.deviceInfo.revision      = (majorVersion !== null && minorVersion !== null) ? `v${majorVersion}.${minorVersion}` : 'N/A';
+                        this.deviceInfo.description   = (majorVersion !== null && minorVersion !== null) ? `${chipVariant} (revision v${majorVersion}.${minorVersion})` : chipVariant;
+                        this.deviceInfo.efuseBlockVersion = (blkMajor !== null && blkMinor !== null) ? `v${blkMajor}.${blkMinor}` : 'N/A';
+
+                        // --- Flash & PSRAM from efuse ---
+                        const reg_flash = await this.safeReg(EFUSE_BASE + 0x044 + 4 * 3);
+                        const reg_psram = await this.safeReg(EFUSE_BASE + 0x044 + 4 * 4);
+
+                        let flashCap = null, flashVendorId = null, psramCap = null, psramVendorId = null;
+                        if (reg_flash !== null) {
+                            flashCap      = (reg_flash >> 27) & 0x07;
+                        }
+                        if (reg_psram !== null) {
+                            flashVendorId = (reg_psram >> 0)  & 0x07;
+                            psramCap      = (reg_psram >> 3)  & 0x03;
+                            psramVendorId = (reg_psram >> 7)  & 0x03;
+                        }
+
+                        const flashVendorMap  = { 1:'XMC', 2:'GD', 3:'FM', 4:'TT', 5:'BY' };
+                        const psramVendorMap  = { 1:'AP Memory 3.3 V', 2:'AP Memory 1.8 V' };
+                        const flashCapMap     = { 0:null, 1:'Embedded Flash 8MB', 2:'Embedded Flash 4MB' };
+                        const psramCapMap     = { 0:null, 1:'8MB', 2:'2MB', 3:'8MB or more' };
+
+                        const flashVendorStr  = flashVendorId ? (flashVendorMap[flashVendorId] || '') : '';
+                        const psramVendorStr  = psramVendorId ? (psramVendorMap[psramVendorId] || '') : '';
+                        const psramCapStr     = psramCap     ? (psramCapMap[psramCap]           || '') : '';
+
+                        this.deviceInfo.psram        = psramCapStr     || 'None';
+                        this.deviceInfo.psramVendor  = psramVendorStr  || '';
+                        this.deviceInfo.crystal      = '40 MHz';
+                        this.deviceInfo.cpuCores     = '2 (Dual)';
+                        this.deviceInfo.maxCpuFreq   = '240 MHz';
+
+                        // --- Features list ---
+                        const features = ['Wi-Fi', 'BLE', 'Dual Core', '240 MHz'];
+                        const flashDesc = flashCap !== null ? flashCapMap[flashCap] : null;
+                        if (flashDesc) features.push(`${flashDesc}${flashVendorStr ? ' (' + flashVendorStr + ')' : ''}`);
+                        if (psramCapStr) features.push(`Embedded PSRAM ${psramCapStr}${psramVendorStr ? ' (' + psramVendorStr + ')' : ''}`);
+                        this.deviceInfo.features = features;
+
+                        // --- MAC Address ---
+                        try {
+                            let mac0 = await this.loader.readReg(MAC_EFUSE_REG);
+                            let mac1 = await this.loader.readReg(MAC_EFUSE_REG + 4);
+                            mac0 = mac0 >>> 0;
+                            mac1 = (mac1 >>> 0) & 0x0000ffff;
+                            const macBytes = [
+                                (mac1 >> 8) & 0xff,
+                                mac1 & 0xff,
+                                (mac0 >> 24) & 0xff,
+                                (mac0 >> 16) & 0xff,
+                                (mac0 >> 8) & 0xff,
+                                mac0 & 0xff
+                            ];
+                            this.deviceInfo.mac = macBytes.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+                        } catch(e) {
+                            this.deviceInfo.mac = 'Unable to read';
+                        }
+
+                        // --- Flash ID, Manufacturer, Device ---
+                        try {
+                            const flashId = await this.loader.readFlashId();
+                            const fid = flashId >>> 0;
+                            this.deviceInfo.flashId = '0x' + fid.toString(16).toUpperCase().padStart(6, '0');
+                            const mfr = (fid >> 16) & 0xff;
+                            const mfrMap = {
+                                0xEF: 'Winbond (W25Q series)',
+                                0xC8: 'GigaDevice',
+                                0x20: 'Micron/ST',
+                                0x9D: 'ISSI',
+                                0xA1: 'Fudan Microelectronics',
+                                0x0B: 'XTX',
+                                0x1C: 'EON',
+                                0xE0: 'Paragon',
+                            };
+                            this.deviceInfo.flashManufacturer = mfr ? ((mfrMap[mfr] || 'Unknown') + ' (0x' + mfr.toString(16).toUpperCase() + ')') : 'Unknown';
+                            const sizeByte = fid & 0xff;
+                            const sizeMap = {
+                                0x17: '8 MB', 0x18: '16 MB', 0x19: '32 MB',
+                                0x15: '2 MB', 0x16: '4 MB',
+                            };
+                            const sizeStr = sizeMap[sizeByte] || 'Unknown size';
+                            const winbondDevMap = {
+                                0x4017: 'W25Q64 (64 Mbit)',
+                                0x4018: 'W25Q128 (128 Mbit)',
+                                0x4019: 'W25Q256 (256 Mbit)',
+                                0x4016: 'W25Q32 (32 Mbit)',
+                                0x4015: 'W25Q16 (16 Mbit)',
+                            };
+                            const devId = fid & 0xffff;
+                            const devName = (mfr === 0xEF && winbondDevMap[devId]) ? winbondDevMap[devId] : '';
+                            this.deviceInfo.flashDevice = devName ? `${sizeStr} - Winbond ${devName}` : sizeStr;
+                        } catch(e) {
+                            this.deviceInfo.flashId = 'N/A';
+                            this.deviceInfo.flashManufacturer = 'Unable to read';
+                            this.deviceInfo.flashDevice = '';
+                        }
+
+                        // --- Flash size ---
                         try {
                             const flashSize = await this.loader.detectFlashSize();
-                            this.deviceInfo.flashSize = flashSize;
-                        } catch (e) {
+                            this.deviceInfo.flashSize = flashSize || 'Unknown';
+                        } catch(e) {
                             this.deviceInfo.flashSize = 'Unable to detect';
                         }
 
-                        this.deviceInfo.psram = 'N/A';
-                        this.deviceInfo.crystal = '40 MHz';
-
+                        // --- Security Info ---
                         try {
-                            const mac = await this.loader.readMac();
-                            this.deviceInfo.mac = mac.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
-                        } catch (e) {
-                            this.deviceInfo.mac = 'Unable to read';
+                            const secInfo = await this.loader.getSecurityInfo();
+                            if (secInfo) {
+                                const flashCryptCnt = secInfo.flashCryptCnt !== undefined ? secInfo.flashCryptCnt : null;
+                                const encEnabled = flashCryptCnt !== null ? (flashCryptCnt !== 0) : false;
+                                this.deviceInfo.flashEncryption = encEnabled ? 'enabled' : 'disabled';
+                                this.deviceInfo.flashEncryptionDetails = flashCryptCnt !== null ? `FLASH_CRYPT_CNT=0x${flashCryptCnt.toString(16)} (set bits=${flashCryptCnt ? flashCryptCnt.toString(2).split('1').length - 1 : 0})` : 'N/A';
+                                this.deviceInfo.flashEncryptionMode = 'XTS AES (supported on this chip)';
+                                const sbEnabled = secInfo.secureBootV1 || secInfo.secureBootV2 || false;
+                                this.deviceInfo.secureBoot = sbEnabled ? 'enabled' : 'disabled';
+                                this.deviceInfo.secureBootType = secInfo.secureBootV2 ? 'v2 (digest-based, supports revocation)' : (secInfo.secureBootV1 ? 'v1' : 'N/A');
+                                this.deviceInfo.jtagProtection = secInfo.jtagDisable ? 'enabled' : 'disabled';
+                                this.deviceInfo.usbProtection = secInfo.usbDlDisable ? 'enabled' : 'disabled';
+                                this.deviceInfo.securityNote = 'ESP32-S3 supports XTS encryption, HMAC key slots, and flexible key purposes.';
+                            }
+                        } catch(e) {
+                            this.deviceInfo.flashEncryption = 'Unable to read';
+                            this.deviceInfo.secureBoot = 'Unable to read';
+                            this.deviceInfo.jtagProtection = 'Unable to read';
+                            this.deviceInfo.usbProtection = 'Unable to read';
                         }
 
                         // Read partitions
