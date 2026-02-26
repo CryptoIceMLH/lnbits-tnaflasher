@@ -1055,6 +1055,7 @@
                         <div class="terminal">{{ detectionOutput || '(No output yet)' }}</div>
                     </div>
                 </div>
+
             <!-- Flash Tools Tab -->
             <div class="tab-content" :class="{ active: activeTab === 'flash-tools' }">
                 <div class="tab-section">
@@ -1167,8 +1168,8 @@
                             <thead>
                                 <tr>
                                     <th>Name</th>
+                                    <th>Label</th>
                                     <th>Version</th>
-                                    <th>Chip ID</th>
                                     <th>Offset</th>
                                     <th>Size</th>
                                 </tr>
@@ -1176,10 +1177,10 @@
                             <tbody>
                                 <tr v-for="app in detectedApps" :key="app.name">
                                     <td>{{ app.name }}</td>
-                                    <td>{{ app.version }}</td>
-                                    <td style="font-family: monospace; font-size: 12px;">0x{{ app.chipId.toString(16) }}</td>
-                                    <td style="font-family: monospace; font-size: 12px;">{{ app.offset }}</td>
-                                    <td>{{ app.size }}</td>
+                                    <td style="font-family: monospace; font-size: 12px;">{{ app.label || '-' }}</td>
+                                    <td>{{ app.version || '-' }}</td>
+                                    <td style="font-family: monospace; font-size: 12px;">{{ app.offset || '-' }}</td>
+                                    <td>{{ app.size || '-' }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1359,138 +1360,45 @@
                         this.deviceInfo.flashSize = flashSize;
                         this.deviceInfo.baudRate = '115,200 bps';
 
-                        // --- ESP32-S3 register constants ---
-                        const EFUSE_BASE      = 0x60007000;
-                        const MAC_EFUSE_REG   = EFUSE_BASE + 0x044;
-                        const EFUSE_BLK1      = EFUSE_BASE + 0x44;
-                        const EFUSE_BLK2      = EFUSE_BASE + 0x5c;
+                        // --- Package & Revision (eFuse reads not available in stub mode) ---
+                        this.deviceInfo.chipVariant   = chipName;
+                        this.deviceInfo.pkgFormFactor = 'N/A';
+                        this.deviceInfo.pkgVersion    = 'N/A';
+                        this.deviceInfo.majorVersion  = 'N/A';
+                        this.deviceInfo.minorVersion  = 'N/A';
+                        this.deviceInfo.revision      = 'N/A';
+                        this.deviceInfo.description   = chipName;
+                        this.deviceInfo.efuseBlockVersion = 'N/A';
 
-                        // --- Package & Revision ---
-                        const reg_blk1_3 = await this.safeReg(EFUSE_BLK1 + 4 * 3);
-                        const reg_blk1_5 = await this.safeReg(EFUSE_BLK1 + 4 * 5);
-                        const reg_blk2_4 = await this.safeReg(EFUSE_BLK2 + 4 * 4);
-
-                        let pkgVersion = null, majorVersion = null, minorVersion = null;
-                        let blkMajor = null, blkMinor = null;
-                        if (reg_blk1_3 !== null && reg_blk1_5 !== null && reg_blk2_4 !== null) {
-                            pkgVersion   = (reg_blk1_3 >> 21) & 0x07;
-                            blkMajor     = (reg_blk2_4 >> 0) & 0x03;
-                            blkMinor     = (reg_blk1_3 >> 24) & 0x07;
-                            const rawMinorHi  = (reg_blk1_5 >> 23) & 0x01;
-                            const rawMinorLow = (reg_blk1_3 >> 18) & 0x07;
-                            const rawMinor    = (rawMinorHi << 3) + rawMinorLow;
-                            const rawMajor    = (reg_blk1_5 >> 24) & 0x03;
-                            const isEco0 = (rawMinor & 0x7) === 0 && blkMajor === 1 && blkMinor === 1;
-                            majorVersion = isEco0 ? 0 : rawMajor;
-                            minorVersion = isEco0 ? 0 : rawMinor;
-                        }
-
-                        const pkgNames  = { 0: 'ESP32-S3 (QFN56)', 1: 'ESP32-S3-PICO-1 (LGA56)' };
-                        const pkgForms  = { 0: '56-pin QFN (7 mm x 7 mm)', 1: 'LGA56' };
-                        const chipVariant  = pkgVersion !== null ? (pkgNames[pkgVersion]  || 'ESP32-S3') : 'ESP32-S3';
-                        const pkgFormFactor = pkgVersion !== null ? (pkgForms[pkgVersion] || 'Unknown')  : 'Unknown';
-                        this.deviceInfo.chipVariant   = chipVariant;
-                        this.deviceInfo.pkgFormFactor = pkgFormFactor;
-                        this.deviceInfo.pkgVersion    = pkgVersion !== null ? String(pkgVersion) : 'N/A';
-                        this.deviceInfo.majorVersion  = majorVersion !== null ? String(majorVersion) : 'N/A';
-                        this.deviceInfo.minorVersion  = minorVersion !== null ? String(minorVersion) : 'N/A';
-                        this.deviceInfo.revision      = (majorVersion !== null && minorVersion !== null) ? `v${majorVersion}.${minorVersion}` : 'N/A';
-                        this.deviceInfo.description   = (majorVersion !== null && minorVersion !== null) ? `${chipVariant} (revision v${majorVersion}.${minorVersion})` : chipVariant;
-                        this.deviceInfo.efuseBlockVersion = (blkMajor !== null && blkMinor !== null) ? `v${blkMajor}.${blkMinor}` : 'N/A';
-
-                        // --- Flash & PSRAM from efuse ---
-                        const reg_flash = await this.safeReg(EFUSE_BASE + 0x044 + 4 * 3);
-                        const reg_psram = await this.safeReg(EFUSE_BASE + 0x044 + 4 * 4);
-
-                        let flashCap = null, flashVendorId = null, psramCap = null, psramVendorId = null;
-                        if (reg_flash !== null) {
-                            flashCap      = (reg_flash >> 27) & 0x07;
-                        }
-                        if (reg_psram !== null) {
-                            flashVendorId = (reg_psram >> 0)  & 0x07;
-                            psramCap      = (reg_psram >> 3)  & 0x03;
-                            psramVendorId = (reg_psram >> 7)  & 0x03;
-                        }
-
-                        const flashVendorMap  = { 1:'XMC', 2:'GD', 3:'FM', 4:'TT', 5:'BY' };
-                        const psramVendorMap  = { 1:'AP Memory 3.3 V', 2:'AP Memory 1.8 V' };
-                        const flashCapMap     = { 0:null, 1:'Embedded Flash 8MB', 2:'Embedded Flash 4MB' };
-                        const psramCapMap     = { 0:null, 1:'8MB', 2:'2MB', 3:'8MB or more' };
-
-                        const flashVendorStr  = flashVendorId ? (flashVendorMap[flashVendorId] || '') : '';
-                        const psramVendorStr  = psramVendorId ? (psramVendorMap[psramVendorId] || '') : '';
-                        const psramCapStr     = psramCap     ? (psramCapMap[psramCap]           || '') : '';
-
-                        this.deviceInfo.psram        = psramCapStr     || 'None';
-                        this.deviceInfo.psramVendor  = psramVendorStr  || '';
+                        // --- Flash & PSRAM ---
+                        this.deviceInfo.psram        = 'N/A';
+                        this.deviceInfo.psramVendor  = '';
                         this.deviceInfo.crystal      = '40 MHz';
                         this.deviceInfo.cpuCores     = '2 (Dual)';
                         this.deviceInfo.maxCpuFreq   = '240 MHz';
 
                         // --- Features list ---
                         const features = ['Wi-Fi', 'BLE', 'Dual Core', '240 MHz'];
-                        const flashDesc = flashCap !== null ? flashCapMap[flashCap] : null;
-                        if (flashDesc) features.push(`${flashDesc}${flashVendorStr ? ' (' + flashVendorStr + ')' : ''}`);
-                        if (psramCapStr) features.push(`Embedded PSRAM ${psramCapStr}${psramVendorStr ? ' (' + psramVendorStr + ')' : ''}`);
                         this.deviceInfo.features = features;
 
-                        // --- MAC Address ---
+                        // --- MAC Address --- use stub loader's chipMac property
                         try {
-                            let mac0 = await this.loader.readReg(MAC_EFUSE_REG);
-                            let mac1 = await this.loader.readReg(MAC_EFUSE_REG + 4);
-                            mac0 = mac0 >>> 0;
-                            mac1 = (mac1 >>> 0) & 0x0000ffff;
-                            const macBytes = [
-                                (mac1 >> 8) & 0xff,
-                                mac1 & 0xff,
-                                (mac0 >> 24) & 0xff,
-                                (mac0 >> 16) & 0xff,
-                                (mac0 >> 8) & 0xff,
-                                mac0 & 0xff
-                            ];
-                            this.deviceInfo.mac = macBytes.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+                            let macStr = 'N/A';
+                            if (this.loader.chipMac && this.loader.chipMac.length >= 6) {
+                                macStr = Array.from(this.loader.chipMac).map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+                            } else if (typeof this.loader.mac_addr === 'function') {
+                                const macArr = await this.loader.mac_addr();
+                                macStr = Array.from(macArr).map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+                            }
+                            this.deviceInfo.mac = macStr;
                         } catch(e) {
-                            this.deviceInfo.mac = 'Unable to read';
+                            this.deviceInfo.mac = 'N/A';
                         }
 
-                        // --- Flash ID, Manufacturer, Device ---
-                        try {
-                            const flashId = await this.loader.readFlashId();
-                            const fid = flashId >>> 0;
-                            this.deviceInfo.flashId = '0x' + fid.toString(16).toUpperCase().padStart(6, '0');
-                            const mfr = (fid >> 16) & 0xff;
-                            const mfrMap = {
-                                0xEF: 'Winbond (W25Q series)',
-                                0xC8: 'GigaDevice',
-                                0x20: 'Micron/ST',
-                                0x9D: 'ISSI',
-                                0xA1: 'Fudan Microelectronics',
-                                0x0B: 'XTX',
-                                0x1C: 'EON',
-                                0xE0: 'Paragon',
-                            };
-                            this.deviceInfo.flashManufacturer = mfr ? ((mfrMap[mfr] || 'Unknown') + ' (0x' + mfr.toString(16).toUpperCase() + ')') : 'Unknown';
-                            const sizeByte = fid & 0xff;
-                            const sizeMap = {
-                                0x17: '8 MB', 0x18: '16 MB', 0x19: '32 MB',
-                                0x15: '2 MB', 0x16: '4 MB',
-                            };
-                            const sizeStr = sizeMap[sizeByte] || 'Unknown size';
-                            const winbondDevMap = {
-                                0x4017: 'W25Q64 (64 Mbit)',
-                                0x4018: 'W25Q128 (128 Mbit)',
-                                0x4019: 'W25Q256 (256 Mbit)',
-                                0x4016: 'W25Q32 (32 Mbit)',
-                                0x4015: 'W25Q16 (16 Mbit)',
-                            };
-                            const devId = fid & 0xffff;
-                            const devName = (mfr === 0xEF && winbondDevMap[devId]) ? winbondDevMap[devId] : '';
-                            this.deviceInfo.flashDevice = devName ? `${sizeStr} - Winbond ${devName}` : sizeStr;
-                        } catch(e) {
-                            this.deviceInfo.flashId = 'N/A';
-                            this.deviceInfo.flashManufacturer = 'Unable to read';
-                            this.deviceInfo.flashDevice = '';
-                        }
+                        // --- Flash ID, Manufacturer, Device (not available in stub mode) ---
+                        this.deviceInfo.flashId = 'N/A';
+                        this.deviceInfo.flashManufacturer = 'N/A';
+                        this.deviceInfo.flashDevice = '';
 
                         // --- Flash size ---
                         try {
