@@ -219,6 +219,19 @@
       <img src="/tnaflasher/static/images/btc-logo.png" alt="BTC" style="height: 80px; margin-bottom: 16px;">
       <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
       <p class="text-subtitle1 text-tna-secondary">Pay with Lightning - Flash your BTC tools</p>
+      <div class="q-mt-sm">
+        <q-btn
+          flat
+          dense
+          outline
+          size="sm"
+          icon="build"
+          label="Advanced Tools"
+          class="text-tna-muted"
+          style="border-color: var(--border); opacity: 0.7;"
+          @click="window.location.href = advancedUrl"
+        />
+      </div>
     </div>
 
     <div class="row q-col-gutter-md justify-center">
@@ -541,9 +554,11 @@
         <q-card class="tna-card bulletin-board" style="position: sticky; top: 16px;">
           <q-card-section class="q-pa-sm">
             <div class="text-subtitle2 text-tna-primary q-mb-xs">News</div>
-            <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item-compact">
-              <div class="bulletin-date-small">${ formatBulletinDate(bulletin.created_at) }</div>
-              <div class="text-tna-secondary text-caption">${ bulletin.message }</div>
+            <div style="max-height: 340px; overflow-y: auto;">
+              <div v-for="bulletin in bulletins" :key="bulletin.id" class="bulletin-item-compact">
+                <div class="bulletin-date-small">${ formatBulletinDate(bulletin.created_at) }</div>
+                <div class="text-tna-secondary text-caption">${ bulletin.message }</div>
+              </div>
             </div>
           </q-card-section>
         </q-card>
@@ -700,6 +715,10 @@
           if (!this.promoApplied || this.promoDiscount === 0) return this.selectedFirmwarePrice
           const discount = Math.floor(this.selectedFirmwarePrice * this.promoDiscount / 100)
           return Math.max(0, this.selectedFirmwarePrice - discount)
+        },
+
+        advancedUrl() {
+          return window.location.origin + '/tnaflasher/' + WALLET_ID + '/advanced'
         }
       },
 

@@ -122,33 +122,35 @@
         </div>
 
         <!-- Existing bulletins -->
-        <q-list v-if="bulletins.length > 0" bordered separator>
-          <q-item v-for="bulletin in bulletins" :key="bulletin.id">
-            <q-item-section avatar>
-              <q-icon :name="bulletin.active ? 'campaign' : 'visibility_off'" :color="bulletin.active ? 'orange' : 'grey'" />
-            </q-item-section>
-            <q-item-section>
-              <q-item-label :class="{ 'text-grey': !bulletin.active }">${ bulletin.message }</q-item-label>
-              <q-item-label caption>${ formatDate(bulletin.created_at) }</q-item-label>
-            </q-item-section>
-            <q-item-section side>
-              <div class="row q-gutter-xs">
-                <q-btn
-                  flat
-                  dense
-                  :icon="bulletin.active ? 'visibility_off' : 'visibility'"
-                  @click="toggleBulletin(bulletin)"
-                  :color="bulletin.active ? 'warning' : 'positive'"
-                >
-                  <q-tooltip>${ bulletin.active ? 'Hide' : 'Show' }</q-tooltip>
-                </q-btn>
-                <q-btn flat dense icon="delete" color="negative" @click="deleteBulletin(bulletin)">
-                  <q-tooltip>Delete</q-tooltip>
-                </q-btn>
-              </div>
-            </q-item-section>
-          </q-item>
-        </q-list>
+        <div v-if="bulletins.length > 0" style="max-height: 260px; overflow-y: auto;">
+          <q-list bordered separator>
+            <q-item v-for="bulletin in bulletins" :key="bulletin.id">
+              <q-item-section avatar>
+                <q-icon :name="bulletin.active ? 'campaign' : 'visibility_off'" :color="bulletin.active ? 'orange' : 'grey'" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label :class="{ 'text-grey': !bulletin.active }">${ bulletin.message }</q-item-label>
+                <q-item-label caption>${ formatDate(bulletin.created_at) }</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs">
+                  <q-btn
+                    flat
+                    dense
+                    :icon="bulletin.active ? 'visibility_off' : 'visibility'"
+                    @click="toggleBulletin(bulletin)"
+                    :color="bulletin.active ? 'warning' : 'positive'"
+                  >
+                    <q-tooltip>${ bulletin.active ? 'Hide' : 'Show' }</q-tooltip>
+                  </q-btn>
+                  <q-btn flat dense icon="delete" color="negative" @click="deleteBulletin(bulletin)">
+                    <q-tooltip>Delete</q-tooltip>
+                  </q-btn>
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </div>
         <div v-else class="text-grey text-center q-pa-md">
           No bulletins yet. Add one above to show on the public page.
         </div>
