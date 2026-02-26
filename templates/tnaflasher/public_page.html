@@ -220,7 +220,7 @@
       <h2 class="q-mb-sm tna-header">Tech Nerd Army Web Flasher</h2>
       <p class="text-subtitle1 text-tna-secondary">Pay with Lightning - Flash your BTC tools</p>
       <div class="q-mt-sm">
-        <a href="javascript:void(0)" @click.prevent="window.location.href = advancedUrl" style="color: var(--text-tna-muted); font-size: 13px; cursor: pointer; text-decoration: none; border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; white-space: nowrap; display: inline-block;">
+        <a href="javascript:void(0)" @click="goToAdvanced()" style="color: #39ff14; font-size: 13px; cursor: pointer; text-decoration: none; border: 1px solid #39ff14; padding: 6px 12px; border-radius: 6px; white-space: nowrap; display: inline-block;">
           ⚙ Advanced Tools
         </a>
       </div>
@@ -541,9 +541,9 @@
 
       </div>
 
-      <!-- Sidebar Column - News/Bulletins (Below on mobile, side on desktop) -->
-      <div v-if="bulletins.length > 0" class="col-12">
-        <q-card class="tna-card bulletin-board">
+      <!-- Sidebar Column - News/Bulletins -->
+      <div v-if="bulletins.length > 0" class="col-12 col-md-4 col-lg-3">
+        <q-card class="tna-card bulletin-board" style="position: sticky; top: 16px;">
           <q-card-section class="q-pa-sm">
             <div class="text-subtitle2 text-tna-primary q-mb-xs">News</div>
             <div style="max-height: 340px; overflow-y: auto;">
@@ -719,6 +719,10 @@
           const colorMap = { positive: 'positive', negative: 'negative', warning: 'warning', info: 'info' }
           this.notification = { color: colorMap[type] || 'info', message }
           setTimeout(() => { this.notification = null }, 3000)
+        },
+
+        goToAdvanced() {
+          window.location.href = window.location.origin + '/tnaflasher/' + WALLET_ID + '/advanced'
         },
 
         formatSats(sats) {
