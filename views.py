@@ -58,3 +58,14 @@ async def public_page(req: Request, wallet_id: str):
     # Replace Jinja2 variable with actual wallet_id
     html_content = html_content.replace("{{ wallet_id }}", wallet_id)
     return HTMLResponse(content=html_content)
+
+
+@tnaflasher_generic_router.get("/{wallet_id}/advanced", response_class=HTMLResponse)
+async def advanced_page(req: Request, wallet_id: str):
+    """Advanced control center page - client-side device interaction"""
+    # Read the standalone HTML template and replace wallet_id
+    template_path = Path(__file__).parent / "templates" / "tnaflasher" / "advanced_page.html"
+    html_content = template_path.read_text()
+    # Replace Jinja2 variables with actual wallet_id
+    html_content = html_content.replace("{{ wallet_id }}", wallet_id)
+    return HTMLResponse(content=html_content)

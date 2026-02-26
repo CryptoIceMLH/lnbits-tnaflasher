@@ -178,3 +178,27 @@ class DeviceWithFirmware(BaseModel):
     id: str
     name: str
     firmware: list[FirmwareInfo]
+
+
+# ============== Audit Log Models ==============
+
+class AuditLog(BaseModel):
+    """Audit log entry for tracking sensitive operations"""
+    id: str
+    wallet_id: str
+    action: str
+    device_mac: Optional[str] = None
+    details: str
+    created_at: Optional[int] = None
+
+
+class CreateAuditLog(BaseModel):
+    """Data needed to create an audit log entry"""
+    action: str
+    device_mac: Optional[str] = None
+    details: str
+
+
+class AuditLogsResponse(BaseModel):
+    """List of audit log entries"""
+    audit_logs: list[AuditLog]

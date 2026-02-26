@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import uuid4
 
 from . import db
-from .models import FlashRequest, Bulletin, PromoCode, Miner, Firmware
+from .models import FlashRequest, Bulletin, PromoCode, Miner, Firmware, AuditLog
 
 
 # ============== Flash Requests ==============
@@ -646,3 +646,81 @@ async def get_all_firmware() -> list[Firmware]:
         """
     )
     return [Firmware(**row) for row in rows]
+
+
+# ============== Feature Flags ==============
+
+async def get_feature_flags() -> dict:
+    """Get all feature flags from settings"""
+    rows = await db.fetchall(
+        """
+        SELECT key, value FROM tnaflasher.settings
+        WHERE key LIKE 'feature_%'
+        """
+    )
+
+    flags = {}
+    for row in rows:
+        key = row["key"]
+        value = row["value"]
+        # Convert string "true"/"false" to boolean
+        flags[key] = value.lower() == "true"
+
+    return flags
+
+
+async def set_feature_flag(key: str, value: bool) -> None:
+    """Set a feature flag (upsert)"""
+    value_str = "true" if value else "false"
+    await set_setting(key, value_str)
+
+
+# ============== Audit Log ==============
+
+async def create_audit_log(
+    wallet_id: str,
+    action: str,
+    details: str,
+    device_mac: Optional[str] = None
+) -> AuditLog:
+    """Create an audit log entry"""
+    log_id = str(uuid4())
+    now = int(time.time())
+
+    await db.execute(
+        """
+        INSERT INTO tnaflasher.audit_log (id, wallet_id, action, device_mac, details, created_at)
+        VALUES (:id, :wallet_id, :action, :device_mac, :details, :created_at)
+        """,
+        {
+            "id": log_id,
+            "wallet_id": wallet_id,
+            "action": action,
+            "device_mac": device_mac,
+            "details": details,
+            "created_at": now
+        }
+    )
+
+    return AuditLog(
+        id=log_id,
+        wallet_id=wallet_id,
+        action=action,
+        device_mac=device_mac,
+        details=details,
+        created_at=now
+    )
+
+
+async def get_audit_log(limit: int = 50) -> list[AuditLog]:
+    """Get recent audit log entries"""
+    rows = await db.fetchall(
+        """
+        SELECT * FROM tnaflasher.audit_log
+        ORDER BY created_at DESC
+        LIMIT :limit
+        """,
+        {"limit": limit}
+    )
+
+    return [AuditLog(**row) for row in rows]

@@ -19,6 +19,8 @@ from .models import (
     CreateMiner,
     MinersResponse,
     UpdateFirmware,
+    CreateAuditLog,
+    AuditLogsResponse,
 )
 from .crud import (
     get_all_flash_requests,
@@ -48,6 +50,10 @@ from .crud import (
     get_firmware_by_miner_and_version,
     update_firmware,
     delete_firmware,
+    get_feature_flags,
+    set_feature_flag,
+    create_audit_log,
+    get_audit_log,
 )
 from .services import (
     get_available_devices,
@@ -476,3 +482,54 @@ async def api_admin_delete_promo_code(
     """Delete a promo code (admin only)"""
     await delete_promo_code(promo_id)
     return {"success": True}
+
+
+# ============== Feature Flags Endpoints ==============
+
+@tnaflasher_api_router.get("/feature-flags")
+async def api_get_feature_flags() -> dict:
+    """Get all feature flag settings (public endpoint)"""
+    flags = await get_feature_flags()
+    return flags
+
+
+@tnaflasher_api_router.post("/feature-flags")
+async def api_set_feature_flag(
+    key: str = Query(...),
+    value: bool = Query(...),
+    user: User = Depends(check_admin)
+):
+    """Set a feature flag (admin only)"""
+    # Validate key is a feature flag
+    if not key.startswith("feature_"):
+        raise HTTPException(status_code=400, detail="Invalid feature flag key")
+
+    await set_feature_flag(key, value)
+    return {"success": True, "key": key, "value": value}
+
+
+# ============== Audit Log Endpoints ==============
+
+@tnaflasher_api_router.post("/advanced/audit-log")
+async def api_create_audit_log(
+    data: CreateAuditLog,
+    wallet_id: str = Query(...)
+):
+    """Create an audit log entry (called from advanced page browser)"""
+    log_entry = await create_audit_log(
+        wallet_id=wallet_id,
+        action=data.action,
+        details=data.details,
+        device_mac=data.device_mac
+    )
+    return log_entry.dict()
+
+
+@tnaflasher_api_router.get("/advanced/audit-log")
+async def api_get_audit_log(
+    limit: int = Query(50, ge=1, le=500),
+    user: User = Depends(check_admin)
+) -> AuditLogsResponse:
+    """Get recent audit log entries (admin only)"""
+    logs = await get_audit_log(limit=limit)
+    return AuditLogsResponse(audit_logs=logs)

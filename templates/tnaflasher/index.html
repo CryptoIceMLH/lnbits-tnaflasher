@@ -450,49 +450,130 @@
     </q-card>
   </div>
 
-  <!-- Recent Flash Requests -->
-  <div class="col-12">
+  <!-- Feature Toggles Card -->
+  <div class="col-12 col-md-6">
     <q-card>
       <q-card-section>
-        <div class="row items-center q-mb-md">
-          <div class="text-h6">Recent Flash Requests</div>
-          <q-space></q-space>
-          <q-btn flat icon="refresh" @click="loadRequests" :loading="loadingRequests">
-            <q-tooltip>Refresh</q-tooltip>
-          </q-btn>
+        <div class="text-h6 q-mb-md">Advanced Features</div>
+        <div class="row q-col-gutter-md">
+          <div class="col-12">
+            <div class="q-mb-md">
+              <q-checkbox v-model="featureFlags.feature_advanced_page" @update:model-value="toggleFeature('feature_advanced_page')" label="Advanced Control Page" />
+              <q-linear-progress v-if="savingFeature" indeterminate color="primary" />
+            </div>
+          </div>
+          <div class="col-12">
+            <div style="font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 12px;">
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_device_info" @update:model-value="toggleFeature('feature_device_info')" size="sm" label="Device Info Tab" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_partitions" @update:model-value="toggleFeature('feature_partitions')" size="sm" label="Partitions Tab" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_backup" @update:model-value="toggleFeature('feature_backup')" size="sm" label="Backup/Download Tab" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_filesystem_read" @update:model-value="toggleFeature('feature_filesystem_read')" size="sm" label="Filesystem Read" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_filesystem_write" @update:model-value="toggleFeature('feature_filesystem_write')" size="sm" label="Filesystem Write" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_serial_monitor" @update:model-value="toggleFeature('feature_serial_monitor')" size="sm" label="Serial Monitor Tab" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_firmware_detection" @update:model-value="toggleFeature('feature_firmware_detection')" size="sm" label="Firmware Detection Tab" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_register_read" @update:model-value="toggleFeature('feature_register_read')" size="sm" label="Register Read" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_register_write" @update:model-value="toggleFeature('feature_register_write')" size="sm" label="Register Write" /></div>
+              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_audit_logging" @update:model-value="toggleFeature('feature_audit_logging')" size="sm" label="Audit Logging" /></div>
+            </div>
+          </div>
         </div>
-
-        <q-table
-          :rows="requests"
-          :columns="requestColumns"
-          row-key="id"
-          :loading="loadingRequests"
-          :pagination="{ rowsPerPage: 20 }"
-          flat
-          bordered
-        >
-          <template v-slot:body-cell-status="props">
-            <q-td :props="props">
-              <q-badge
-                :color="getStatusColor(props.row.status)"
-                :label="props.row.status"
-              />
-            </q-td>
-          </template>
-
-          <template v-slot:body-cell-created_at="props">
-            <q-td :props="props">
-              ${ formatDate(props.row.created_at) }
-            </q-td>
-          </template>
-
-          <template v-slot:body-cell-amount_sats="props">
-            <q-td :props="props">
-              ${ formatSats(props.row.amount_sats) }
-            </q-td>
-          </template>
-        </q-table>
       </q-card-section>
+    </q-card>
+  </div>
+
+  <!-- Recent Flash Requests & Audit Log -->
+  <div class="col-12">
+    <q-card>
+      <q-tabs
+        v-model="dashboardTab"
+        dense
+        class="text-grey"
+        active-color="primary"
+        indicator-color="primary"
+        align="left"
+      >
+        <q-tab name="requests" label="Recent Flash Requests" />
+        <q-tab name="audit" label="Audit Log" />
+      </q-tabs>
+
+      <q-separator />
+
+      <q-tab-panels v-model="dashboardTab" animated>
+        <!-- Flash Requests Tab -->
+        <q-tab-panel name="requests">
+          <div class="row items-center q-mb-md">
+            <div class="text-h6">Recent Flash Requests</div>
+            <q-space></q-space>
+            <q-btn flat icon="refresh" @click="loadRequests" :loading="loadingRequests">
+              <q-tooltip>Refresh</q-tooltip>
+            </q-btn>
+          </div>
+
+          <q-table
+            :rows="requests"
+            :columns="requestColumns"
+            row-key="id"
+            :loading="loadingRequests"
+            :pagination="{ rowsPerPage: 20 }"
+            flat
+            bordered
+          >
+            <template v-slot:body-cell-status="props">
+              <q-td :props="props">
+                <q-badge
+                  :color="getStatusColor(props.row.status)"
+                  :label="props.row.status"
+                />
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-created_at="props">
+              <q-td :props="props">
+                ${ formatDate(props.row.created_at) }
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-amount_sats="props">
+              <q-td :props="props">
+                ${ formatSats(props.row.amount_sats) }
+              </q-td>
+            </template>
+          </q-table>
+        </q-tab-panel>
+
+        <!-- Audit Log Tab -->
+        <q-tab-panel name="audit">
+          <div class="row items-center q-mb-md">
+            <div class="text-h6">Audit Log</div>
+            <q-space></q-space>
+            <q-btn flat icon="refresh" @click="loadAuditLog" :loading="loadingAuditLog">
+              <q-tooltip>Refresh</q-tooltip>
+            </q-btn>
+          </div>
+
+          <q-table
+            :rows="auditLog"
+            :columns="auditColumns"
+            row-key="id"
+            :loading="loadingAuditLog"
+            :pagination="{ rowsPerPage: 20 }"
+            flat
+            bordered
+          >
+            <template v-slot:body-cell-created_at="props">
+              <q-td :props="props">
+                ${ formatDate(props.row.created_at) }
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-details="props">
+              <q-td :props="props">
+                <q-btn flat dense size="sm" label="View" @click="viewAuditDetails(props.row)" />
+              </q-td>
+            </template>
+          </q-table>
+        </q-tab-panel>
+      </q-tab-panels>
     </q-card>
   </div>
 </div>
@@ -591,6 +672,20 @@
           { name: 'version', label: 'Version', field: 'version', align: 'left' },
           { name: 'amount_sats', label: 'Amount', field: 'amount_sats', align: 'right' },
           { name: 'status', label: 'Status', field: 'status', align: 'center' },
+        ],
+        // Feature Toggles
+        featureFlags: {},
+        savingFeature: false,
+        dashboardTab: 'requests',
+        // Audit Log
+        auditLog: [],
+        loadingAuditLog: false,
+        auditColumns: [
+          { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true },
+          { name: 'action', label: 'Action', field: 'action', align: 'left' },
+          { name: 'wallet_id', label: 'Wallet', field: 'wallet_id', align: 'left' },
+          { name: 'device_mac', label: 'Device MAC', field: 'device_mac', align: 'left' },
+          { name: 'details', label: 'Details', field: 'details', align: 'center' },
         ]
       }
     },
@@ -1042,6 +1137,66 @@
             LNbits.utils.notifyApiError(e)
           }
         })
+      },
+
+      // Feature Flags
+      async loadFeatureFlags() {
+        try {
+          const res = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/feature-flags',
+            null
+          )
+          this.featureFlags = res
+        } catch (e) {
+          console.error('Failed to load feature flags:', e)
+          this.featureFlags = {}
+        }
+      },
+
+      async toggleFeature(key) {
+        this.savingFeature = true
+        try {
+          await LNbits.api.request(
+            'POST',
+            `/tnaflasher/api/v1/feature-flags?key=${key}&value=${this.featureFlags[key]}`,
+            this.g.user.wallets[0].adminkey
+          )
+          this.$q.notify({ type: 'positive', message: 'Feature flag updated' })
+        } catch (e) {
+          LNbits.utils.notifyApiError(e)
+          // Revert on error
+          await this.loadFeatureFlags()
+        } finally {
+          this.savingFeature = false
+        }
+      },
+
+      // Audit Log
+      async loadAuditLog() {
+        this.loadingAuditLog = true
+        try {
+          const res = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/advanced/audit-log?limit=100',
+            this.g.user.wallets[0].adminkey
+          )
+          this.auditLog = res.audit_logs || []
+        } catch (e) {
+          console.error('Failed to load audit log:', e)
+          this.auditLog = []
+        } finally {
+          this.loadingAuditLog = false
+        }
+      },
+
+      viewAuditDetails(entry) {
+        this.$q.dialog({
+          title: 'Audit Log Entry',
+          message: `<strong>Action:</strong> ${entry.action}<br/><strong>Details:</strong> ${entry.details}<br/><strong>MAC:</strong> ${entry.device_mac || 'N/A'}<br/><strong>Wallet:</strong> ${entry.wallet_id}`,
+          html: true,
+          ok: 'Close'
+        })
       }
     },
 
@@ -1059,6 +1214,8 @@
       await this.loadRequests()
       await this.loadBulletins()
       await this.loadPromoCodes()
+      await this.loadFeatureFlags()
+      await this.loadAuditLog()
     }
   })
 

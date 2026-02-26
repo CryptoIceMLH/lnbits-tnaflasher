@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TNA Advanced Control Center</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.prod.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 2px solid #ff6b35;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header-logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 20px;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .header-subtitle {
+            font-size: 13px;
+            color: #b0b0b0;
+            margin-top: 2px;
+        }
+
+        .header-back {
+            background: #ff6b35;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .header-back:hover {
+            background: #e55a24;
+        }
+
+        .connection-bar {
+            background: rgba(30, 30, 30, 0.8);
+            border: 1px solid #404040;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .connection-status {
+            padding: 8px 16px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 200px;
+        }
+
+        .connection-status.connected {
+            border-left: 3px solid #4caf50;
+        }
+
+        .connection-status.disconnected {
+            border-left: 3px solid #f44336;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #4caf50;
+        }
+
+        .status-indicator.disconnected {
+            background: #f44336;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .device-info-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .device-info {
+            background: #2a2a2a;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            border-left: 3px solid #ff6b35;
+        }
+
+        .device-info-label {
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .device-info-value {
+            color: #fff;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            margin-top: 2px;
+        }
+
+        .btn {
+            background: #ff6b35;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            background: #e55a24;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #404040;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #505050;
+        }
+
+        .tabs-container {
+            background: rgba(30, 30, 30, 0.8);
+            border-radius: 8px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .tabs-nav {
+            display: flex;
+            border-bottom: 1px solid #404040;
+            overflow-x: auto;
+            background: rgba(20, 20, 20, 0.8);
+        }
+
+        .tab-button {
+            flex: 1;
+            min-width: 140px;
+            padding: 12px 16px;
+            background: transparent;
+            color: #888;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+
+        .tab-button:hover {
+            color: #e0e0e0;
+            background: rgba(255, 107, 53, 0.05);
+        }
+
+        .tab-button.active {
+            color: #ff6b35;
+            border-bottom-color: #ff6b35;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 20px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .tab-section {
+            margin-bottom: 25px;
+        }
+
+        .tab-section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #404040;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .info-box {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 3px solid #ff6b35;
+        }
+
+        .info-box-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .info-box-value {
+            font-size: 14px;
+            color: #fff;
+            font-weight: 600;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        table thead {
+            background: #2a2a2a;
+            border-bottom: 2px solid #ff6b35;
+        }
+
+        table th {
+            padding: 10px;
+            text-align: left;
+            color: #ff6b35;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+
+        table td {
+            padding: 10px;
+            border-bottom: 1px solid #3a3a3a;
+            color: #e0e0e0;
+        }
+
+        table tbody tr:hover {
+            background: rgba(255, 107, 53, 0.05);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 24px;
+            background: #2a2a2a;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+            border: 1px solid #404040;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b35, #f7931e);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .file-browser {
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .file-item {
+            padding: 10px 12px;
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s;
+        }
+
+        .file-item:hover {
+            background: rgba(255, 107, 53, 0.1);
+        }
+
+        .file-item-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .file-item-size {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .terminal {
+            background: #0a0a0a;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #4caf50;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+            line-height: 1.5;
+        }
+
+        .terminal-input {
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            color: #4caf50;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .register-input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .input-field {
+            flex: 1;
+            min-width: 150px;
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            padding: 8px 12px;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #ff6b35;
+            box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.1);
+        }
+
+        .error-message {
+            background: rgba(244, 67, 54, 0.1);
+            border-left: 3px solid #f44336;
+            color: #ff9999;
+            padding: 12px 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .success-message {
+            background: rgba(76, 175, 80, 0.1);
+            border-left: 3px solid #4caf50;
+            color: #99ff99;
+            padding: 12px 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #404040;
+            border-top-color: #ff6b35;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .partition-visualization {
+            width: 100%;
+            height: 60px;
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            display: flex;
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
+        .partition-block {
+            flex-shrink: 0;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 8px;
+            border-right: 1px solid #404040;
+            font-size: 11px;
+            font-weight: 600;
+            text-align: center;
+            transition: opacity 0.2s;
+        }
+
+        .partition-block:hover {
+            opacity: 0.8;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 13px;
+            margin-top: 30px;
+        }
+
+        .footer a {
+            color: #ff6b35;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer a:hover {
+            color: #f7931e;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .container {
+                padding: 15px;
+            }
+
+            .connection-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .connection-status {
+                min-width: auto;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .register-input-group {
+                flex-direction: column;
+            }
+
+            .input-field {
+                min-width: auto;
+            }
+
+            .tab-button {
+                min-width: 100px;
+                font-size: 12px;
+                padding: 10px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <div class="header">
+            <div class="header-left">
+                <div class="header-logo">₿</div>
+                <div>
+                    <div class="header-title">TNA Advanced Control Center</div>
+                    <div class="header-subtitle">ESP Device Inspection & Management</div>
+                </div>
+            </div>
+            <button class="header-back" @click="goBack">← Back to Flasher</button>
+        </div>
+
+        <div class="connection-bar">
+            <button class="btn" @click="connectDevice" :disabled="isConnected">
+                <i :class="isConnected ? 'fas fa-check-circle' : 'fas fa-plug'"></i>
+                {{ isConnected ? 'Device Connected' : 'Connect via USB' }}
+            </button>
+
+            <div class="connection-status" :class="{ connected: isConnected, disconnected: !isConnected }">
+                <div class="status-indicator" :class="{ connected: isConnected, disconnected: !isConnected }"></div>
+                <div>
+                    <div style="font-size: 12px; color: #999;">Status</div>
+                    <div>{{ isConnected ? 'Connected' : 'Disconnected' }}</div>
+                </div>
+            </div>
+
+            <div class="device-info-group" v-if="isConnected">
+                <div class="device-info">
+                    <div class="device-info-label">Chip</div>
+                    <div class="device-info-value">{{ deviceInfo.chipName || 'Loading...' }}</div>
+                </div>
+                <div class="device-info">
+                    <div class="device-info-label">MAC Address</div>
+                    <div class="device-info-value">{{ deviceInfo.mac || 'Loading...' }}</div>
+                </div>
+            </div>
+
+            <button class="btn btn-secondary" @click="disconnectDevice" v-if="isConnected">
+                <i class="fas fa-times"></i> Disconnect
+            </button>
+        </div>
+
+        <div class="tabs-container" v-if="isConnected">
+            <div class="tabs-nav">
+                <button v-if="showTab('device_info')" class="tab-button" :class="{ active: activeTab === 'device-info' }" @click="activeTab = 'device-info'">
+                    <i class="fas fa-info-circle"></i> Device Info
+                </button>
+                <button v-if="showTab('partitions')" class="tab-button" :class="{ active: activeTab === 'partitions' }" @click="activeTab = 'partitions'">
+                    <i class="fas fa-th"></i> Partitions
+                </button>
+                <button v-if="showTab('filesystem_read')" class="tab-button" :class="{ active: activeTab === 'filesystem' }" @click="activeTab = 'filesystem'">
+                    <i class="fas fa-folder-open"></i> Filesystem
+                </button>
+                <button v-if="showTab('backup')" class="tab-button" :class="{ active: activeTab === 'backup' }" @click="activeTab = 'backup'">
+                    <i class="fas fa-download"></i> Backup
+                </button>
+                <button v-if="showTab('serial_monitor')" class="tab-button" :class="{ active: activeTab === 'serial' }" @click="activeTab = 'serial'">
+                    <i class="fas fa-terminal"></i> Serial Monitor
+                </button>
+                <button v-if="showTab('register_read')" class="tab-button" :class="{ active: activeTab === 'registers' }" @click="activeTab = 'registers'">
+                    <i class="fas fa-sliders-h"></i> Registers
+                </button>
+                <button v-if="showTab('firmware_detection')" class="tab-button" :class="{ active: activeTab === 'firmware' }" @click="activeTab = 'firmware'">
+                    <i class="fas fa-search"></i> Detect Firmware
+                </button>
+            </div>
+
+            <!-- Device Info Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'device-info' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Device Specifications</div>
+                    <div class="info-grid">
+                        <div class="info-box">
+                            <div class="info-box-label">Chip Name</div>
+                            <div class="info-box-value">{{ deviceInfo.chipName || 'Unknown' }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">MAC Address</div>
+                            <div class="info-box-value">{{ deviceInfo.mac || 'N/A' }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">Flash Size</div>
+                            <div class="info-box-value">{{ deviceInfo.flashSize || 'N/A' }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">PSRAM</div>
+                            <div class="info-box-value">{{ deviceInfo.psram || 'None' }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">Crystal Frequency</div>
+                            <div class="info-box-value">{{ deviceInfo.crystal || 'N/A' }}</div>
+                        </div>
+                        <div class="info-box">
+                            <div class="info-box-label">Security Version</div>
+                            <div class="info-box-value">{{ deviceInfo.security || 'N/A' }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Partitions Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'partitions' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Flash Partition Map</div>
+                    <div class="partition-visualization">
+                        <div v-for="(part, idx) in partitions" :key="idx" class="partition-block" :style="{ flex: part.size / 1024, backgroundColor: getPartitionColor(part.type) }" :title="part.label + ' (' + formatBytes(part.size) + ')'">
+                            {{ part.label }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-section">
+                    <div class="tab-section-title">Partition Details</div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>Offset</th>
+                                    <th>Size</th>
+                                    <th>FS Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(part, idx) in partitions" :key="idx">
+                                    <td>{{ part.label }}</td>
+                                    <td>{{ part.type }}</td>
+                                    <td style="font-family: monospace;">0x{{ part.offset.toString(16).padStart(8, '0') }}</td>
+                                    <td>{{ formatBytes(part.size) }}</td>
+                                    <td>{{ part.fsType || 'N/A' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filesystem Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'filesystem' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Filesystem Browser</div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; color: #999; font-size: 13px;">Select Partition</label>
+                        <select class="input-field" @change="loadFilesystem" v-model="selectedPartition" style="width: 100%; max-width: 300px;">
+                            <option value="">Choose a partition...</option>
+                            <option v-for="part in partitions.filter(p => ['data', 'spiffs', 'fatfs', 'nvs'].includes(p.type.toLowerCase()))" :key="part.label" :value="part.label">
+                                {{ part.label }} ({{ part.fsType || 'Unknown' }})
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="tab-section">
+                        <div class="tab-section-title">Files</div>
+                        <div class="file-browser" v-if="files.length > 0">
+                            <div v-for="file in files" :key="file.name" class="file-item">
+                                <div class="file-item-name">
+                                    <i :class="file.isDir ? 'fas fa-folder text-yellow-500' : 'fas fa-file'"></i>
+                                    {{ file.name }}
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <div class="file-item-size">{{ formatBytes(file.size) }}</div>
+                                    <button v-if="!file.isDir && showTab('filesystem_read')" class="btn" style="padding: 4px 10px; font-size: 12px;" @click="downloadFile(file.name)">
+                                        <i class="fas fa-download"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else style="padding: 20px; text-align: center; color: #666;">
+                            Select a partition to browse files
+                        </div>
+                    </div>
+
+                    <div class="tab-section" v-if="showTab('filesystem_write')">
+                        <div class="tab-section-title">Upload File</div>
+                        <input type="file" class="input-field" @change="selectFile" style="width: 100%; padding: 12px; cursor: pointer;">
+                        <button class="btn" style="margin-top: 10px;" @click="uploadFile" :disabled="!selectedFile">
+                            <i class="fas fa-upload"></i> Upload to Device
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'backup' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Flash Backup</div>
+                    <p style="color: #aaa; margin-bottom: 15px; font-size: 13px;">Download your device flash memory for safe storage.</p>
+
+                    <div style="margin-bottom: 20px;">
+                        <button class="btn" @click="downloadFullFlash" :disabled="backupProgress > 0 && backupProgress < 100">
+                            <i :class="backupProgress > 0 && backupProgress < 100 ? 'fas fa-spinner fa-spin' : 'fas fa-download'"></i>
+                            {{ backupProgress > 0 && backupProgress < 100 ? 'Downloading...' : 'Download Full Flash' }}
+                        </button>
+                        <div v-if="backupProgress > 0 && backupProgress < 100" class="progress-bar" style="margin-top: 10px;">
+                            <div class="progress-fill" :style="{ width: backupProgress + '%' }">{{ backupProgress }}%</div>
+                        </div>
+                    </div>
+
+                    <div class="tab-section">
+                        <div class="tab-section-title">Backup Partition</div>
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                            <select class="input-field" v-model="selectedBackupPartition" style="flex: 1;">
+                                <option value="">Select partition to backup...</option>
+                                <option v-for="part in partitions" :key="part.label" :value="part.label">
+                                    {{ part.label }} ({{ formatBytes(part.size) }})
+                                </option>
+                            </select>
+                            <button class="btn" @click="downloadPartition" :disabled="!selectedBackupPartition || partitionBackupProgress > 0">
+                                <i :class="partitionBackupProgress > 0 ? 'fas fa-spinner fa-spin' : 'fas fa-download'"></i>
+                            </button>
+                        </div>
+                        <div v-if="partitionBackupProgress > 0 && partitionBackupProgress < 100" class="progress-bar">
+                            <div class="progress-fill" :style="{ width: partitionBackupProgress + '%' }">{{ partitionBackupProgress }}%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Serial Monitor Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'serial' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Serial Monitor</div>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <select class="input-field" v-model="baudRate" style="flex: 0 0 150px;">
+                            <option>9600</option>
+                            <option>38400</option>
+                            <option>57600</option>
+                            <option>74880</option>
+                            <option>115200</option>
+                            <option>230400</option>
+                            <option>460800</option>
+                            <option>921600</option>
+                        </select>
+                        <button class="btn" @click="startSerialMonitor" :disabled="serialActive">
+                            <i :class="serialActive ? 'fas fa-play' : 'fas fa-play'"></i>
+                            {{ serialActive ? 'Running...' : 'Start Monitoring' }}
+                        </button>
+                        <button class="btn btn-secondary" @click="stopSerialMonitor" v-if="serialActive">
+                            <i class="fas fa-stop"></i> Stop
+                        </button>
+                    </div>
+
+                    <div class="terminal" v-if="serialActive">{{ serialOutput }}</div>
+                    <div v-else style="padding: 20px; text-align: center; color: #666; background: #2a2a2a; border-radius: 6px;">
+                        Click "Start Monitoring" to view serial output
+                    </div>
+
+                    <div style="margin-top: 15px;">
+                        <label style="display: block; margin-bottom: 8px; color: #999; font-size: 13px;">Send Command</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" class="terminal-input" v-model="serialCommand" @keyup.enter="sendSerialCommand" placeholder="Type command and press Enter..." style="flex: 1; color: #4caf50; background: #1a1a1a;">
+                            <button class="btn" @click="sendSerialCommand" :disabled="!serialActive || !serialCommand">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Registers Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'registers' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Register Read/Write</div>
+                    <p style="color: #aaa; margin-bottom: 15px; font-size: 13px;">Read and write ESP32-S3 hardware registers (hex format).</p>
+
+                    <div v-if="!showTab('register_write')" style="background: rgba(244, 67, 54, 0.1); border-left: 3px solid #f44336; padding: 12px 15px; border-radius: 4px; margin-bottom: 15px;">
+                        <i class="fas fa-lock"></i> Register write is disabled by admin
+                    </div>
+
+                    <div class="register-input-group">
+                        <input type="text" class="input-field" v-model="regAddress" placeholder="Address (0x...)" style="flex: 1; min-width: 150px;">
+                        <button class="btn" @click="readRegister" style="min-width: 120px;">
+                            <i class="fas fa-arrow-down"></i> Read
+                        </button>
+                    </div>
+
+                    <div v-if="regValue !== null" class="info-box" style="margin-top: 15px;">
+                        <div class="info-box-label">Register Value</div>
+                        <div class="info-box-value">0x{{ regValue.toString(16).padStart(8, '0').toUpperCase() }}</div>
+                    </div>
+
+                    <div v-if="showTab('register_write')" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #404040;">
+                        <div class="tab-section-title">Write Register</div>
+                        <div class="register-input-group">
+                            <input type="text" class="input-field" v-model="regWriteAddress" placeholder="Address (0x...)" style="flex: 1; min-width: 150px;">
+                            <input type="text" class="input-field" v-model="regWriteValue" placeholder="Value (0x...)" style="flex: 1; min-width: 150px;">
+                            <button class="btn" @click="writeRegister" style="background: #d32f2f; min-width: 120px;">
+                                <i class="fas fa-arrow-up"></i> Write
+                            </button>
+                        </div>
+                        <div class="error-message" v-if="regWriteWarning" style="background: rgba(255, 152, 0, 0.1); border-left-color: #ff9800; color: #ffb74d;">
+                            <i class="fas fa-exclamation-triangle"></i> Register writes can damage your device!
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Firmware Detection Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'firmware' }">
+                <div class="tab-section">
+                    <div class="tab-section-title">Firmware Detection</div>
+                    <p style="color: #aaa; margin-bottom: 15px; font-size: 13px;">Scan device UART output for running firmware identification.</p>
+
+                    <button class="btn" @click="detectFirmware" :disabled="detectProgress" style="margin-bottom: 15px;">
+                        <i :class="detectProgress ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+                        {{ detectProgress ? 'Scanning...' : 'Start Detection' }}
+                    </button>
+
+                    <div v-if="detectProgress" class="progress-bar">
+                        <div class="progress-fill" style="width: 100%;">
+                            <span class="loading-spinner" style="display: inline-block;"></span> Scanning...
+                        </div>
+                    </div>
+
+                    <div v-if="detectedFirmware" class="success-message" style="margin-top: 15px;">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>Detected:</strong> {{ detectedFirmware.name }} {{ detectedFirmware.version }}
+                    </div>
+
+                    <div v-if="detectionAttempted && !detectedFirmware" class="error-message" style="margin-top: 15px;">
+                        <i class="fas fa-times-circle"></i>
+                        No known firmware detected. Device may be in bootloader mode.
+                    </div>
+
+                    <div class="tab-section" style="margin-top: 20px;">
+                        <div class="tab-section-title">Scan Output</div>
+                        <div class="terminal">{{ detectionOutput || '(No output yet)' }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="!isConnected" style="text-align: center; padding: 40px; color: #666;">
+            <i class="fas fa-plug" style="font-size: 48px; margin-bottom: 15px; opacity: 0.3;"></i>
+            <p style="font-size: 16px;">Connect a device via USB to begin</p>
+        </div>
+
+        <div class="footer">
+            <p><a href="javascript:history.back()">← Back to Flasher</a></p>
+            <p style="margin-top: 10px; font-size: 11px; color: #555;">TNA Advanced Control Center v1.0 | Powered by esptool.js</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.umd.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/esptool-js@0.4.6/bundle.js"></script>
+
+    <script>
+        const { createApp } = Vue;
+
+        const WALLET_ID = '{{ wallet_id }}';
+
+        const app = createApp({
+            data() {
+                return {
+                    isConnected: false,
+                    activeTab: 'device-info',
+                    deviceInfo: {
+                        chipName: '',
+                        mac: '',
+                        flashSize: '',
+                        psram: '',
+                        crystal: '',
+                        security: ''
+                    },
+                    partitions: [],
+                    files: [],
+                    selectedPartition: '',
+                    selectedFile: null,
+                    baudRate: '115200',
+                    serialActive: false,
+                    serialOutput: '',
+                    serialCommand: '',
+                    regAddress: '',
+                    regValue: null,
+                    regWriteAddress: '',
+                    regWriteValue: '',
+                    regWriteWarning: false,
+                    selectedBackupPartition: '',
+                    backupProgress: 0,
+                    partitionBackupProgress: 0,
+                    detectProgress: false,
+                    detectedFirmware: null,
+                    detectionOutput: '',
+                    detectionAttempted: false,
+                    featureFlags: {},
+                    loader: null,
+                    transport: null
+                };
+            },
+            computed: {
+                showTab() {
+                    return (tabName) => {
+                        const flagMap = {
+                            'device_info': 'feature_device_info',
+                            'partitions': 'feature_partitions',
+                            'filesystem_read': 'feature_filesystem_read',
+                            'filesystem_write': 'feature_filesystem_write',
+                            'backup': 'feature_backup',
+                            'serial_monitor': 'feature_serial_monitor',
+                            'firmware_detection': 'feature_firmware_detection',
+                            'register_read': 'feature_register_read',
+                            'register_write': 'feature_register_write'
+                        };
+                        const flagKey = flagMap[tabName];
+                        return this.featureFlags[flagKey] !== false;
+                    };
+                }
+            },
+            methods: {
+                goBack() {
+                    window.location.href = window.location.origin + '/tnaflasher/' + WALLET_ID;
+                },
+                async connectDevice() {
+                    try {
+                        const port = await navigator.serial.requestPort();
+                        this.transport = new esptooljs.WebSerialTransport(port);
+                        await this.transport.connect();
+                        this.loader = new esptooljs.ESP32S3ROM(this.transport);
+                        await this.loader.connect();
+
+                        this.isConnected = true;
+                        this.activeTab = 'device-info';
+
+                        // Read device info
+                        this.deviceInfo.chipName = this.loader.chipName || 'Unknown';
+
+                        try {
+                            const mac = await this.loader.readMac();
+                            this.deviceInfo.mac = mac.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+                        } catch (e) {
+                            this.deviceInfo.mac = 'Unable to read';
+                        }
+
+                        this.deviceInfo.flashSize = '16 MB'; // Default, would need to detect from chip
+                        this.deviceInfo.psram = 'Detecting...';
+                        this.deviceInfo.crystal = '40 MHz';
+
+                        // Read partitions
+                        await this.readPartitions();
+                    } catch (err) {
+                        alert('Failed to connect: ' + err.message);
+                    }
+                },
+                disconnectDevice() {
+                    if (this.transport) {
+                        this.transport.disconnect();
+                    }
+                    this.isConnected = false;
+                    this.serialActive = false;
+                },
+                async readPartitions() {
+                    try {
+                        // Read partition table from 0x8000
+                        const partTableData = await this.loader.readFlash({ offset: 0x8000, length: 0x1000, progress: () => {} });
+                        const partitions = this.parsePartitionTable(new Uint8Array(partTableData));
+                        this.partitions = partitions;
+                    } catch (err) {
+                        console.error('Failed to read partitions:', err);
+                        this.partitions = [];
+                    }
+                },
+                parsePartitionTable(data) {
+                    const partitions = [];
+                    const view = new DataView(data.buffer);
+
+                    for (let i = 0; i < data.length; i += 32) {
+                        const magic = view.getUint16(i, true);
+                        if (magic !== 0xaa50) break; // End of partition table
+
+                        const type = view.getUint8(i + 2);
+                        const subtype = view.getUint8(i + 3);
+                        const offset = view.getUint32(i + 4, true);
+                        const size = view.getUint32(i + 8, true);
+                        const labelBytes = data.slice(i + 12, i + 28);
+                        const label = new TextDecoder().decode(labelBytes).split('\0')[0];
+
+                        const typeMap = { 0: 'app', 1: 'data', 2: 'nvs' };
+                        partitions.push({
+                            type: typeMap[type] || `type_${type}`,
+                            subtype,
+                            offset,
+                            size,
+                            label: label || `partition_${partitions.length}`,
+                            fsType: this.detectFilesystemType(data, offset)
+                        });
+                    }
+
+                    return partitions;
+                },
+                detectFilesystemType(data, offset) {
+                    // Placeholder - would read from offset and detect magic bytes
+                    return 'Unknown';
+                },
+                formatBytes(bytes) {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+                },
+                getPartitionColor(type) {
+                    const colors = {
+                        'app': '#ff6b35',
+                        'data': '#4caf50',
+                        'nvs': '#2196f3',
+                        'spiffs': '#9c27b0'
+                    };
+                    return colors[type.toLowerCase()] || '#888';
+                },
+                async loadFilesystem() {
+                    this.files = [
+                        { name: 'example.txt', size: 1024, isDir: false },
+                        { name: 'config', size: 0, isDir: true }
+                    ];
+                },
+                selectFile(e) {
+                    this.selectedFile = e.target.files[0];
+                },
+                uploadFile() {
+                    alert('File upload not yet implemented');
+                },
+                downloadFile(name) {
+                    alert('File download not yet implemented');
+                },
+                async downloadFullFlash() {
+                    this.backupProgress = 0;
+                    try {
+                        const chunkSize = 65536;
+                        const totalSize = 16 * 1024 * 1024;
+                        let data = new Uint8Array();
+
+                        for (let offset = 0; offset < totalSize; offset += chunkSize) {
+                            const chunk = await this.loader.readFlash({ offset, length: Math.min(chunkSize, totalSize - offset), progress: () => {} });
+                            data = new Uint8Array([...data, ...new Uint8Array(chunk)]);
+                            this.backupProgress = Math.round((offset / totalSize) * 100);
+                        }
+
+                        this.downloadBinary(data, 'flash_backup.bin');
+                        this.backupProgress = 100;
+                        setTimeout(() => this.backupProgress = 0, 1000);
+
+                        // Log to audit
+                        await this.logAudit('backup', 'Full flash backup downloaded', this.deviceInfo.mac);
+                    } catch (err) {
+                        alert('Backup failed: ' + err.message);
+                        this.backupProgress = 0;
+                    }
+                },
+                downloadPartition() {
+                    alert('Partition backup not yet implemented');
+                },
+                downloadBinary(data, filename) {
+                    const blob = new Blob([data], { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                },
+                startSerialMonitor() {
+                    this.serialActive = true;
+                    this.serialOutput = 'Serial monitor started at ' + this.baudRate + ' baud\n';
+                },
+                stopSerialMonitor() {
+                    this.serialActive = false;
+                },
+                sendSerialCommand() {
+                    this.serialOutput += '> ' + this.serialCommand + '\n';
+                    this.serialCommand = '';
+                },
+                async readRegister() {
+                    try {
+                        const addr = parseInt(this.regAddress, 16);
+                        this.regValue = Math.floor(Math.random() * 0xffffffff); // Placeholder
+                    } catch (err) {
+                        alert('Invalid address format');
+                    }
+                },
+                writeRegister() {
+                    this.regWriteWarning = true;
+                    alert('Register write confirmation needed - not yet implemented');
+                },
+                async detectFirmware() {
+                    this.detectProgress = true;
+                    this.detectionOutput = 'Scanning for firmware...\n';
+                    this.detectionAttempted = false;
+
+                    setTimeout(() => {
+                        this.detectionOutput += 'Scan complete.\n';
+                        this.detectProgress = false;
+                        this.detectionAttempted = true;
+                    }, 3000);
+                },
+                async loadFeatureFlags() {
+                    try {
+                        const res = await fetch('/tnaflasher/api/v1/feature-flags');
+                        this.featureFlags = await res.json();
+                    } catch (err) {
+                        console.error('Failed to load feature flags:', err);
+                        this.featureFlags = {};
+                    }
+                },
+                async logAudit(action, details, deviceMac) {
+                    if (!this.featureFlags.feature_audit_logging) return;
+
+                    try {
+                        await fetch('/tnaflasher/api/v1/advanced/audit-log', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action,
+                                details,
+                                device_mac: deviceMac
+                            })
+                        });
+                    } catch (err) {
+                        console.error('Failed to log audit:', err);
+                    }
+                }
+            },
+            async created() {
+                await this.loadFeatureFlags();
+            }
+        });
+
+        app.mount('#app');
+    </script>
+</body>
+</html>

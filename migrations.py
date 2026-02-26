@@ -105,3 +105,43 @@ async def m006_create_firmware(db):
         )
         """
     )
+
+
+async def m007_create_audit_log(db):
+    """Create the audit_log table for tracking sensitive operations and feature flags"""
+    # Create audit log table
+    await db.execute(
+        """
+        CREATE TABLE tnaflasher.audit_log (
+            id TEXT PRIMARY KEY,
+            wallet_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            device_mac TEXT,
+            details TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    # Insert default feature flag settings (all features ON by default)
+    feature_flags = [
+        ("feature_advanced_page", "true"),
+        ("feature_device_info", "true"),
+        ("feature_partitions", "true"),
+        ("feature_backup", "true"),
+        ("feature_filesystem_read", "true"),
+        ("feature_filesystem_write", "true"),
+        ("feature_serial_monitor", "true"),
+        ("feature_firmware_detection", "true"),
+        ("feature_register_read", "true"),
+        ("feature_register_write", "true"),
+        ("feature_audit_logging", "true"),
+    ]
+
+    for key, value in feature_flags:
+        await db.execute(
+            """
+            INSERT INTO tnaflasher.settings (key, value) VALUES (:key, :value)
+            """,
+            {"key": key, "value": value}
+        )
