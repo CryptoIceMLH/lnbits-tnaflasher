@@ -3,7 +3,27 @@
     "allow": [
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "WebFetch(domain:thelastoutpostworkshop.github.io)",
+      "Bash(curl -s \"https://thelastoutpostworkshop.github.io/ESPConnect/\")",
+      "Bash(curl -s \"https://thelastoutpostworkshop.github.io/ESPConnect/assets/index-DQkdsEAH.js\")",
+      "Bash(curl -s \"https://thelastoutpostworkshop.github.io/ESPConnect/assets/index-CD7CpfSE.css\")",
+      "Bash(tr ';' '\\\\n')",
+      "Bash(grep -oP 'https?://[^\\\\s\"\"'\"''\"'`>]+')",
+      "Bash(curl -s \"https://api.github.com/repos/thelastoutpostworkshop/ESPConnect\")",
+      "Bash(curl -s \"https://api.github.com/repos/Jason2866/WebSerial_ESPTool\")",
+      "Bash(curl -s \"https://api.github.com/repos/thelastoutpostworkshop/ESPConnect/git/trees/main?recursive=1\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/README.md\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/package.json\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/src/services/esptoolClient.ts\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/src/components/FlashFirmwareTab.vue\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/src/App.vue\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/index.html\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/src/main.ts\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/CONTRIBUTING.md\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/src/types/web-serial.d.ts\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/thelastoutpostworkshop/ESPConnect/main/src/types/flash-firmware.ts\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/Jason2866/WebSerial_ESPTool/development/README.md\")"
     ]
   }
 }
