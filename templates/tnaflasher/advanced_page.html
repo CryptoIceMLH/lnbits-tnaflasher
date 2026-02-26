@@ -903,7 +903,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.umd.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/esptool-js@0.4.6/bundle.js"></script>
+    <script type="module">
+        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.6/bundle.js';
+        window.ESPLoader = ESPLoader;
+        window.Transport = Transport;
+    </script>
 
     <script>
         const { createApp } = Vue;
@@ -974,10 +978,15 @@
                 async connectDevice() {
                     try {
                         const port = await navigator.serial.requestPort();
-                        this.transport = new esptooljs.WebSerialTransport(port);
-                        await this.transport.connect();
-                        this.loader = new esptooljs.ESP32S3ROM(this.transport);
-                        await this.loader.connect();
+                        this.transport = new window.Transport(port, true);
+                        this.loader = new window.ESPLoader({
+                            transport: this.transport,
+                            baudrate: 115200,
+                            romBaudrate: 115200,
+                            enableTracing: false,
+                            debugLogging: false,
+                        });
+                        await this.loader.main();
 
                         this.isConnected = true;
                         this.activeTab = 'device-info';
