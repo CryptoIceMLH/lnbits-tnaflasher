@@ -991,8 +991,16 @@
             <div class="tab-content" :class="{ active: activeTab === 'serial' }">
                 <div class="tab-section">
                     <div class="tab-section-title">Serial Monitor</div>
-                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                        <select class="input-field" v-model="baudRate" style="flex: 0 0 150px;">
+
+                    <!-- Warning banner while in serial monitor mode -->
+                    <div v-if="serialMonitorMode" style="background: rgba(255,152,0,0.12); border-left: 3px solid #ff9800; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #ffb74d;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Flash operations paused while serial monitor is active. Stop monitoring to reconnect.
+                    </div>
+
+                    <!-- Controls row -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
+                        <select class="input-field" v-model="baudRate" style="flex: 0 0 150px;" :disabled="serialActive">
                             <option>9600</option>
                             <option>38400</option>
                             <option>57600</option>
@@ -1003,18 +1011,34 @@
                             <option>921600</option>
                         </select>
                         <button class="btn" @click="startSerialMonitor" :disabled="serialActive">
-                            <i :class="serialActive ? 'fas fa-play' : 'fas fa-play'"></i>
-                            {{ serialActive ? 'Running...' : 'Start Monitoring' }}
+                            <i class="fas fa-play"></i> {{ serialActive ? 'Running...' : 'Start Monitoring' }}
                         </button>
                         <button class="btn btn-secondary" @click="stopSerialMonitor" v-if="serialActive">
                             <i class="fas fa-stop"></i> Stop
                         </button>
+                        <button class="btn btn-secondary" @click="connectDevice" v-if="!serialActive && !isConnected && serialOutput">
+                            <i class="fas fa-plug"></i> Reconnect
+                        </button>
+                        <button class="btn btn-secondary" @click="scrollLocked = !scrollLocked"
+                                v-if="serialActive"
+                                :style="scrollLocked ? 'border-color:#f7931a;color:#f7931a;' : ''">
+                            <i :class="scrollLocked ? 'fas fa-lock' : 'fas fa-lock-open'"></i>
+                            {{ scrollLocked ? 'Resume Scroll' : 'Pause Scroll' }}
+                        </button>
+                        <button class="btn btn-secondary" @click="serialOutput = ''" v-if="serialOutput" style="font-size:12px;">
+                            <i class="fas fa-trash"></i> Clear
+                        </button>
                     </div>
 
-                    <!-- Always-visible terminal output -->
-                    <div class="terminal serial-monitor-output" style="min-height: 200px; max-height: 400px; overflow-y: auto; position: relative;">
-                        <pre v-if="serialOutput" style="margin:0; white-space: pre-wrap; word-break: break-all; color: inherit; font-family: inherit; font-size: inherit;">{{ serialOutput }}</pre>
-                        <div v-else style="color: #555; padding: 10px; font-style: italic;">Click "Start Monitoring" to view serial output...</div>
+                    <!-- Terminal output — resizable -->
+                    <div class="terminal serial-monitor-output"
+                         style="height: 500px; overflow-y: auto; position: relative; resize: vertical; min-height: 150px;">
+                        <pre v-if="serialOutput"
+                             style="margin:0; white-space: pre-wrap; word-break: break-all;
+                                    color: inherit; font-family: inherit; font-size: inherit;">{{ serialOutput }}</pre>
+                        <div v-else style="color: #555; padding: 10px; font-style: italic;">
+                            Click "Start Monitoring" to view serial output...
+                        </div>
                     </div>
                     <div style="display: flex; justify-content: flex-end; margin-top: 8px;" v-if="serialOutput">
                         <button class="btn btn-secondary" @click="saveSerialLog" style="font-size: 12px; padding: 6px 14px;">
@@ -1321,6 +1345,8 @@
                     serialPort: null,
                     serialReader: null,
                     serialPipeAbort: null,
+                    scrollLocked: false,
+                    serialMonitorMode: false,
                     regAddress: '0x60007000',
                     regValue: null,
                     regWriteAddress: '',
@@ -1670,31 +1696,39 @@
                     URL.revokeObjectURL(url);
                 },
                 async startSerialMonitor() {
+                    if (!this.loader) {
+                        alert('Connect a device first');
+                        return;
+                    }
                     this.serialActive = true;
+                    this.scrollLocked = false;
                     this.serialOutput = `[Serial monitor started at ${this.baudRate} baud]\n`;
                     try {
-                        // Get port from loader
-                        if (!this.loader || !this.loader.port) {
-                            this.serialOutput += '[Error: Device not connected]\n';
-                            this.serialActive = false;
-                            return;
-                        }
-                        this.serialPort = this.loader.port;
+                        // Step 1: fully disconnect stub so chip resets and runs firmware
+                        this.serialOutput += '[Disconnecting flash stub to allow firmware to boot...]\n';
+                        await this.loader.disconnect();
+                        this.serialMonitorMode = true;
 
-                        // Release stub's internal reader lock before piping
-                        await this.loader.releaseReaderWriter();
+                        // Step 2: wait for chip to boot
+                        await new Promise(r => setTimeout(r, 600));
+                        this.serialOutput += '[Device booting firmware — listening...]\n';
 
-                        // Setup text decoder
+                        // Step 3: reopen port for raw serial at user-selected baud
+                        const port = this.loader.port;
+                        await port.open({ baudRate: parseInt(this.baudRate) || 115200 });
+                        this.serialPort = port;
+
+                        // Step 4: pipe through TextDecoderStream
                         const decoder = new TextDecoderStream();
                         this.serialPipeAbort = new AbortController();
-                        this.serialPort.readable.pipeTo(decoder.writable, { signal: this.serialPipeAbort.signal }).catch(() => {});
+                        port.readable.pipeTo(decoder.writable, { signal: this.serialPipeAbort.signal }).catch(() => {});
                         this.serialReader = decoder.readable.getReader();
 
-                        this.serialOutput += '[Listening for serial output...]\n';
                         this.readSerialLoop();
                     } catch (err) {
                         this.serialOutput += `[Error: ${err.message}]\n`;
                         this.serialActive = false;
+                        this.serialMonitorMode = false;
                     }
                 },
                 async readSerialLoop() {
@@ -1703,11 +1737,12 @@
                             const { value, done } = await this.serialReader.read();
                             if (done) break;
                             this.serialOutput += value;
-                            // Auto-scroll to bottom
-                            this.$nextTick(() => {
-                                const el = this.$el?.querySelector('.serial-monitor-output');
-                                if (el) el.scrollTop = el.scrollHeight;
-                            });
+                            if (!this.scrollLocked) {
+                                this.$nextTick(() => {
+                                    const el = document.querySelector('.serial-monitor-output');
+                                    if (el) el.scrollTop = el.scrollHeight;
+                                });
+                            }
                         }
                     } catch(e) {
                         if (this.serialActive) {
@@ -1725,11 +1760,14 @@
                         await this.serialReader.cancel().catch(() => {});
                         this.serialReader = null;
                     }
-                    // Restore the loader's internal reader so flash ops work again
-                    if (this.loader) {
-                        await this.loader.reconnect().catch(() => {});
+                    // Close raw port so connectDevice() can reopen it
+                    if (this.serialPort) {
+                        await this.serialPort.close().catch(() => {});
+                        this.serialPort = null;
                     }
-                    this.serialOutput += '\n[Serial monitor stopped]\n';
+                    this.serialMonitorMode = false;
+                    this.isConnected = false;
+                    this.serialOutput += '\n[Serial monitor stopped — click "Reconnect" to restore flash operations]\n';
                 },
                 async sendSerialCommand() {
                     if (!this.serialActive || !this.serialCommand) return;
