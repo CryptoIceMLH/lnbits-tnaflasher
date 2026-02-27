@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from lnbits.core.models import User
 from lnbits.decorators import check_admin
 from pathlib import Path
+from typing import Optional
 
 from .models import (
     CreateFlashRequest,
@@ -146,7 +147,23 @@ async def api_download_firmware(
         raise HTTPException(status_code=404, detail="Firmware not found")
 
     # Mark token as used
-    await mark_token_used(payload.get("payment_hash", ""))
+    payment_hash = payload.get("payment_hash", "")
+    await mark_token_used(payment_hash)
+
+    # Log to audit log - get wallet_id from flash_request
+    flash_req = await get_flash_request(payment_hash)
+    wallet_id = "public"  # Default fallback
+    if flash_req:
+        # Try to get wallet_id from the invoice metadata if available
+        # For now, use "public" since FlashRequest doesn't store wallet_id
+        wallet_id = "public"
+
+    await create_audit_log(
+        wallet_id=wallet_id,
+        action="firmware_download",
+        details=f"Device: {device}, Version: {version}",
+        device_mac=None
+    )
 
     # Return firmware file
     return FileResponse(
@@ -157,18 +174,29 @@ async def api_download_firmware(
 
 
 @tnaflasher_api_router.post("/flash/complete/{payment_hash}")
-async def api_mark_complete(payment_hash: str):
+async def api_mark_complete(
+    payment_hash: str,
+    wallet_id: Optional[str] = Query(None),
+    device_mac: Optional[str] = Query(None)
+):
     """Mark a flash as complete (called after successful flash)"""
     result = await mark_flash_complete(payment_hash)
     if not result:
         raise HTTPException(status_code=404, detail="Flash request not found")
 
+    # Resolve miner name from device ID
+    miner_name = result.device
+    if result.device:
+        miner = await get_miner(result.device)
+        if miner:
+            miner_name = miner.name
+
     # Log to audit log
     await create_audit_log(
-        wallet_id="public",
+        wallet_id=wallet_id or "public",
         action="flash_complete",
-        details=f"Device: {result.device}, Version: {result.version}",
-        device_mac=None
+        details=f"Device: {miner_name}, Version: {result.version}",
+        device_mac=device_mac
     )
 
     return {"success": True}

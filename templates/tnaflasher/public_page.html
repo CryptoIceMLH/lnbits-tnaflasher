@@ -611,6 +611,7 @@
           // Wallet validation
           walletValid: false,
           walletError: '',
+          walletId: '',
 
           // Browser check
           isChromium: !!navigator.serial,
@@ -629,6 +630,7 @@
           transport: null,
           loader: null,
           chipInfo: '',
+          chipMac: null,
 
           // Device selection
           devices: [],
@@ -802,6 +804,16 @@
             await this.loader.main()
 
             this.chipInfo = `${this.loader.chip.CHIP_NAME}`
+
+            // Try to read MAC address
+            try {
+              const mac = await this.loader.chip.get_mac_string(this.loader)
+              this.chipMac = mac
+              this.log(`MAC: ${mac}`)
+            } catch (e) {
+              this.chipMac = null
+            }
+
             this.connected = true
             this.log(`Connected: ${this.chipInfo}`)
 
@@ -1012,10 +1024,11 @@
 
             // Mark flash as complete on server
             try {
-              await api.request(
-                'POST',
-                `/tnaflasher/api/v1/flash/complete/${this.paymentHash}`
-              )
+              const params = new URLSearchParams()
+              if (this.walletId) params.append('wallet_id', this.walletId)
+              if (this.chipMac) params.append('device_mac', this.chipMac)
+              const url = `/tnaflasher/api/v1/flash/complete/${this.paymentHash}` + (params.toString() ? `?${params}` : '')
+              await api.request('POST', url)
             } catch (e) {
               console.error('Failed to mark complete:', e)
             }
@@ -1059,6 +1072,9 @@
           this.walletError = 'Invalid wallet ID. Please use the correct public URL from the admin dashboard.'
           return
         }
+
+        // Store wallet_id for audit logging
+        this.walletId = WALLET_ID
 
         // Try to load devices - this validates the extension is working
         try {

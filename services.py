@@ -19,6 +19,7 @@ from .crud import (
     get_miner,
     get_firmware_by_miner,
     get_firmware_by_miner_and_version,
+    create_audit_log,
 )
 
 
@@ -141,6 +142,14 @@ async def create_flash_invoice(
         # Mark as paid immediately
         await mark_flash_paid(free_hash)
 
+        # Log to audit log
+        await create_audit_log(
+            wallet_id=wallet_id,
+            action="flash_paid",
+            details=f"Device: {miner.name}, Version: {version}, Amount: 0 sats (FREE)",
+            device_mac=None
+        )
+
         # Increment promo code usage
         if promo_code:
             await increment_promo_usage(promo_code)
@@ -174,6 +183,14 @@ async def create_flash_invoice(
         device=device,
         version=version,
         amount_sats=final_price
+    )
+
+    # Log to audit log
+    await create_audit_log(
+        wallet_id=wallet_id,
+        action="invoice_created",
+        details=f"Device: {miner.name}, Version: {version}, Amount: {final_price} sats",
+        device_mac=None
     )
 
     # Increment promo code usage (it will be counted when invoice is created)
