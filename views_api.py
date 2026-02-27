@@ -24,6 +24,7 @@ from .models import (
 )
 from .crud import (
     get_all_flash_requests,
+    get_flash_request,
     get_stats,
     get_price,
     set_price,
@@ -47,6 +48,7 @@ from .crud import (
     create_firmware,
     get_firmware_by_miner,
     get_firmware,
+    create_audit_log,
     get_firmware_by_miner_and_version,
     update_firmware,
     delete_firmware,
@@ -160,6 +162,15 @@ async def api_mark_complete(payment_hash: str):
     result = await mark_flash_complete(payment_hash)
     if not result:
         raise HTTPException(status_code=404, detail="Flash request not found")
+
+    # Log to audit log
+    await create_audit_log(
+        wallet_id="public",
+        action="flash_complete",
+        details=f"Device: {result.device}, Version: {result.version}",
+        device_mac=None
+    )
+
     return {"success": True}
 
 

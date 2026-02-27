@@ -543,6 +543,25 @@
                 ${ formatSats(props.row.amount_sats) }
               </q-td>
             </template>
+
+            <template v-slot:body-cell-token_used="props">
+              <q-td :props="props">
+                <q-badge :color="props.row.token_used ? 'positive' : 'grey'"
+                         :label="props.row.token_used ? 'Yes' : 'No'" />
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-paid_at="props">
+              <q-td :props="props">
+                ${ props.row.paid_at ? formatDate(props.row.paid_at) : '—' }
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-flashed_at="props">
+              <q-td :props="props">
+                ${ props.row.flashed_at ? formatDate(props.row.flashed_at) : '—' }
+              </q-td>
+            </template>
           </q-table>
         </q-tab-panel>
 
@@ -672,11 +691,14 @@
         newPromoMaxUses: 1,
         addingPromoCode: false,
         requestColumns: [
-          { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true },
+          { name: 'created_at', label: 'Requested', field: 'created_at', align: 'left', sortable: true },
           { name: 'device', label: 'Device', field: 'device', align: 'left' },
           { name: 'version', label: 'Version', field: 'version', align: 'left' },
-          { name: 'amount_sats', label: 'Amount', field: 'amount_sats', align: 'right' },
+          { name: 'amount_sats', label: 'Sats', field: 'amount_sats', align: 'right' },
           { name: 'status', label: 'Status', field: 'status', align: 'center' },
+          { name: 'token_used', label: 'Downloaded', field: 'token_used', align: 'center' },
+          { name: 'paid_at', label: 'Paid', field: 'paid_at', align: 'left' },
+          { name: 'flashed_at', label: 'Flashed', field: 'flashed_at', align: 'left' },
         ],
         // Feature Toggles (pre-populated with defaults)
         featureFlags: {
@@ -1226,7 +1248,7 @@
             '/tnaflasher/api/v1/advanced/audit-log?limit=100',
             this.g.user.wallets[0].adminkey
           )
-          this.auditLog = res.audit_logs || []
+          this.auditLog = res.data.audit_logs || []
         } catch (e) {
           console.error('Failed to load audit log:', e)
           this.auditLog = []
@@ -1263,6 +1285,9 @@
       }
     }
   })
+
+  // Stub $t so Quasar internal i18n calls don't throw
+  window.app.config.globalProperties.$t = (key) => key
 
   window.app.mount('#vue')
 </script>
