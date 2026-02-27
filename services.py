@@ -143,10 +143,11 @@ async def create_flash_invoice(
         await mark_flash_paid(free_hash)
 
         # Log to audit log
+        promo_info = f", Promo: {promo_code} ({discount_percent}% off)" if promo_code else " (price was 0)"
         await create_audit_log(
             wallet_id=wallet_id,
             action="flash_paid",
-            details=f"Device: {miner.name}, Version: {version}, Amount: 0 sats (FREE)",
+            details=f"Device: {miner.name}, Version: {version}, Amount: 0 sats (FREE){promo_info}",
             device_mac=None
         )
 
@@ -186,10 +187,11 @@ async def create_flash_invoice(
     )
 
     # Log to audit log
+    promo_info = f", Promo: {promo_code} ({discount_percent}% off, base: {base_price} sats)" if promo_code else ""
     await create_audit_log(
         wallet_id=wallet_id,
         action="invoice_created",
-        details=f"Device: {miner.name}, Version: {version}, Amount: {final_price} sats",
+        details=f"Device: {miner.name}, Version: {version}, Amount: {final_price} sats{promo_info}",
         device_mac=None
     )
 

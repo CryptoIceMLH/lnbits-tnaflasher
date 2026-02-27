@@ -757,6 +757,18 @@
           })
         },
 
+        async logAudit(action, details, deviceMac) {
+          try {
+            await api.request(
+              'POST',
+              `/tnaflasher/api/v1/advanced/audit-log?wallet_id=${WALLET_ID}`,
+              { action, details, device_mac: deviceMac }
+            )
+          } catch(e) {
+            console.error('Audit log failed:', e)
+          }
+        },
+
         async loadDevices() {
           const response = await api.request('GET', '/tnaflasher/api/v1/devices')
           this.devices = response.data.devices || []
@@ -816,6 +828,13 @@
 
             this.connected = true
             this.log(`Connected: ${this.chipInfo}`)
+
+            // Log device connect to audit log
+            await this.logAudit(
+              'device_connect',
+              `Chip: ${this.chipInfo}${this.chipMac ? '' : ', MAC unavailable'}`,
+              this.chipMac
+            )
 
           } catch (e) {
             this.log(`Error: ${e.message}`)

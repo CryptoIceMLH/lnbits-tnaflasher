@@ -150,18 +150,17 @@ async def api_download_firmware(
     payment_hash = payload.get("payment_hash", "")
     await mark_token_used(payment_hash)
 
-    # Log to audit log - get wallet_id from flash_request
-    flash_req = await get_flash_request(payment_hash)
-    wallet_id = "public"  # Default fallback
-    if flash_req:
-        # Try to get wallet_id from the invoice metadata if available
-        # For now, use "public" since FlashRequest doesn't store wallet_id
-        wallet_id = "public"
+    # Resolve miner name from device ID
+    miner_name = device  # fallback to UUID if lookup fails
+    miner = await get_miner(device)
+    if miner:
+        miner_name = miner.name
 
+    # Log to audit log
     await create_audit_log(
-        wallet_id=wallet_id,
+        wallet_id="public",
         action="firmware_download",
-        details=f"Device: {device}, Version: {version}",
+        details=f"Device: {miner_name}, Version: {version}, Ref: {payment_hash[:16]}...",
         device_mac=None
     )
 
