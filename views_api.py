@@ -49,12 +49,12 @@ from .crud import (
     get_firmware_by_miner,
     get_firmware,
     create_audit_log,
+    clear_audit_log,
     get_firmware_by_miner_and_version,
     update_firmware,
     delete_firmware,
     get_feature_flags,
     set_feature_flag,
-    create_audit_log,
     get_audit_log,
 )
 from .services import (
@@ -544,3 +544,10 @@ async def api_get_audit_log(
     """Get recent audit log entries (admin only)"""
     logs = await get_audit_log(limit=limit)
     return AuditLogsResponse(audit_logs=logs)
+
+
+@tnaflasher_api_router.delete("/advanced/audit-log")
+async def api_clear_audit_log(user: User = Depends(check_admin)):
+    """Clear all audit log entries (admin only)"""
+    await clear_audit_log()
+    return {"success": True}

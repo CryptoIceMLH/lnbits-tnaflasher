@@ -724,3 +724,8 @@ async def get_audit_log(limit: int = 50) -> list[AuditLog]:
     )
 
     return [AuditLog(**row) for row in rows]
+
+
+async def clear_audit_log() -> None:
+    """Clear all audit log entries"""
+    await db.execute("DELETE FROM tnaflasher.audit_log")

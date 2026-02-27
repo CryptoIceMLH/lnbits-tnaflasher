@@ -485,119 +485,48 @@
     </q-card>
   </div>
 
-  <!-- Recent Flash Requests & Audit Log -->
+  <!-- Activity Log -->
   <div class="col-12">
     <q-card>
-      <q-tabs
-        v-model="dashboardTab"
-        dense
-        no-caps
-        class="text-grey"
-        active-color="primary"
-        indicator-color="primary"
-        align="left"
-      >
-        <q-tab name="requests" label="Flash Requests" />
-        <q-tab name="audit" label="Audit Log" />
-      </q-tabs>
+      <q-card-section>
+        <div class="row items-center q-mb-md">
+          <div class="text-h6">Activity Log</div>
+          <q-space></q-space>
+          <q-input v-model="activitySearch" dense outlined placeholder="Search..."
+                   style="width:220px" class="q-mr-sm" clearable>
+            <template v-slot:prepend><q-icon name="search" /></template>
+          </q-input>
+          <q-btn flat icon="refresh" @click="loadActivityLog" :loading="loadingActivity">
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
+          <q-btn flat icon="download" @click="downloadActivityLog" color="primary">
+            <q-tooltip>Download CSV</q-tooltip>
+          </q-btn>
+          <q-btn flat icon="delete_sweep" @click="confirmClearLog" color="negative">
+            <q-tooltip>Clear Log</q-tooltip>
+          </q-btn>
+        </div>
 
-      <q-separator />
-
-      <q-tab-panels v-model="dashboardTab" animated>
-        <!-- Flash Requests Tab -->
-        <q-tab-panel name="requests">
-          <div class="row items-center q-mb-md">
-            <div class="text-h6">Recent Flash Requests</div>
-            <q-space></q-space>
-            <q-btn flat icon="refresh" @click="loadRequests" :loading="loadingRequests">
-              <q-tooltip>Refresh</q-tooltip>
-            </q-btn>
-          </div>
-
+        <div style="max-height: 400px; overflow-y: auto;">
           <q-table
-            :rows="requests"
-            :columns="requestColumns"
+            :rows="filteredActivity"
+            :columns="activityColumns"
             row-key="id"
-            :loading="loadingRequests"
-            :pagination="{ rowsPerPage: 20 }"
-            flat
-            bordered
+            :loading="loadingActivity"
+            :pagination="{ rowsPerPage: 50, sortBy: 'created_at', descending: true }"
+            flat bordered dense
           >
-            <template v-slot:body-cell-status="props">
-              <q-td :props="props">
-                <q-badge
-                  :color="getStatusColor(props.row.status)"
-                  :label="props.row.status"
-                />
-              </q-td>
-            </template>
-
             <template v-slot:body-cell-created_at="props">
-              <q-td :props="props">
-                ${ formatDate(props.row.created_at) }
-              </q-td>
+              <q-td :props="props">${ formatDate(props.row.created_at) }</q-td>
             </template>
-
-            <template v-slot:body-cell-amount_sats="props">
+            <template v-slot:body-cell-action="props">
               <q-td :props="props">
-                ${ formatSats(props.row.amount_sats) }
-              </q-td>
-            </template>
-
-            <template v-slot:body-cell-token_used="props">
-              <q-td :props="props">
-                <q-badge :color="props.row.token_used ? 'positive' : 'grey'"
-                         :label="props.row.token_used ? 'Yes' : 'No'" />
-              </q-td>
-            </template>
-
-            <template v-slot:body-cell-paid_at="props">
-              <q-td :props="props">
-                ${ props.row.paid_at ? formatDate(props.row.paid_at) : '—' }
-              </q-td>
-            </template>
-
-            <template v-slot:body-cell-flashed_at="props">
-              <q-td :props="props">
-                ${ props.row.flashed_at ? formatDate(props.row.flashed_at) : '—' }
+                <q-badge :color="getActionColor(props.row.action)" :label="props.row.action" />
               </q-td>
             </template>
           </q-table>
-        </q-tab-panel>
-
-        <!-- Audit Log Tab -->
-        <q-tab-panel name="audit">
-          <div class="row items-center q-mb-md">
-            <div class="text-h6">Audit Log</div>
-            <q-space></q-space>
-            <q-btn flat icon="refresh" @click="loadAuditLog" :loading="loadingAuditLog">
-              <q-tooltip>Refresh</q-tooltip>
-            </q-btn>
-          </div>
-
-          <q-table
-            :rows="auditLog"
-            :columns="auditColumns"
-            row-key="id"
-            :loading="loadingAuditLog"
-            :pagination="{ rowsPerPage: 20 }"
-            flat
-            bordered
-          >
-            <template v-slot:body-cell-created_at="props">
-              <q-td :props="props">
-                ${ formatDate(props.row.created_at) }
-              </q-td>
-            </template>
-
-            <template v-slot:body-cell-details="props">
-              <q-td :props="props">
-                <q-btn flat dense size="sm" label="View" @click="viewAuditDetails(props.row)" />
-              </q-td>
-            </template>
-          </q-table>
-        </q-tab-panel>
-      </q-tab-panels>
+        </div>
+      </q-card-section>
     </q-card>
   </div>
 </div>
@@ -690,16 +619,6 @@
         newPromoDiscount: 10,
         newPromoMaxUses: 1,
         addingPromoCode: false,
-        requestColumns: [
-          { name: 'created_at', label: 'Requested', field: 'created_at', align: 'left', sortable: true },
-          { name: 'device', label: 'Device', field: 'device', align: 'left' },
-          { name: 'version', label: 'Version', field: 'version', align: 'left' },
-          { name: 'amount_sats', label: 'Sats', field: 'amount_sats', align: 'right' },
-          { name: 'status', label: 'Status', field: 'status', align: 'center' },
-          { name: 'token_used', label: 'Downloaded', field: 'token_used', align: 'center' },
-          { name: 'paid_at', label: 'Paid', field: 'paid_at', align: 'left' },
-          { name: 'flashed_at', label: 'Flashed', field: 'flashed_at', align: 'left' },
-        ],
         // Feature Toggles (pre-populated with defaults)
         featureFlags: {
           feature_advanced_page: true,
@@ -719,16 +638,16 @@
           feature_audit_logging: true,
         },
         savingFeature: false,
-        dashboardTab: 'requests',
-        // Audit Log
-        auditLog: [],
-        loadingAuditLog: false,
-        auditColumns: [
+        // Activity Log
+        activityLog: [],
+        loadingActivity: false,
+        activitySearch: '',
+        activityColumns: [
           { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true },
-          { name: 'action', label: 'Action', field: 'action', align: 'left' },
+          { name: 'action', label: 'Action', field: 'action', align: 'left', sortable: true },
           { name: 'wallet_id', label: 'Wallet', field: 'wallet_id', align: 'left' },
           { name: 'device_mac', label: 'Device MAC', field: 'device_mac', align: 'left' },
-          { name: 'details', label: 'Details', field: 'details', align: 'center' },
+          { name: 'details', label: 'Details', field: 'details', align: 'left' },
         ]
       }
     },
@@ -737,6 +656,16 @@
       publicUrl() {
         if (!this.selectedWallet) return 'Select a wallet first'
         return `${window.location.origin}/tnaflasher/${this.selectedWallet}`
+      },
+      filteredActivity() {
+        if (!this.activitySearch) return this.activityLog
+        const q = this.activitySearch.toLowerCase()
+        return this.activityLog.filter(e =>
+          (e.action || '').toLowerCase().includes(q) ||
+          (e.details || '').toLowerCase().includes(q) ||
+          (e.wallet_id || '').toLowerCase().includes(q) ||
+          (e.device_mac || '').toLowerCase().includes(q)
+        )
       }
     },
 
@@ -758,23 +687,6 @@
           case 'expired': return 'negative'
           default: return 'grey'
         }
-      },
-
-      async initData() {
-        // Build wallet options from user's wallets
-        this.walletOptions = this.g.user.wallets.map(w => ({
-          label: w.name,
-          value: w.id
-        }))
-        // Load all data
-        await this.loadStats()
-        await this.loadWallet()
-        await this.loadMiners()
-        await this.loadRequests()
-        await this.loadBulletins()
-        await this.loadPromoCodes()
-        await this.loadFeatureFlags()
-        await this.loadAuditLog()
       },
 
       initUploadData(minerId) {
@@ -1019,21 +931,6 @@
         })
       },
 
-      async loadRequests() {
-        this.loadingRequests = true
-        try {
-          const response = await LNbits.api.request(
-            'GET',
-            '/tnaflasher/api/v1/admin/requests',
-            this.g.user.wallets[0].adminkey
-          )
-          this.requests = response.data
-        } catch (e) {
-          console.error('Failed to load requests:', e)
-        }
-        this.loadingRequests = false
-      },
-
       async copyPublicUrl() {
         if (!this.selectedWallet) {
           this.$q.notify({ type: 'warning', message: 'Select a wallet first' })
@@ -1240,49 +1137,89 @@
       },
 
       // Audit Log
-      async loadAuditLog() {
-        this.loadingAuditLog = true
+      async loadActivityLog() {
+        this.loadingActivity = true
         try {
           const res = await LNbits.api.request(
             'GET',
-            '/tnaflasher/api/v1/advanced/audit-log?limit=100',
+            '/tnaflasher/api/v1/advanced/audit-log?limit=500',
             this.g.user.wallets[0].adminkey
           )
-          this.auditLog = res.data.audit_logs || []
-        } catch (e) {
-          console.error('Failed to load audit log:', e)
-          this.auditLog = []
+          this.activityLog = res.data.audit_logs || []
+        } catch(e) {
+          console.error('loadActivityLog', e)
+          this.activityLog = []
         } finally {
-          this.loadingAuditLog = false
+          this.loadingActivity = false
         }
       },
 
-      viewAuditDetails(entry) {
-        this.$q.dialog({
-          title: 'Audit Log Entry',
-          message: `<strong>Action:</strong> ${entry.action}<br/><strong>Details:</strong> ${entry.details}<br/><strong>MAC:</strong> ${entry.device_mac || 'N/A'}<br/><strong>Wallet:</strong> ${entry.wallet_id}`,
-          html: true,
-          ok: 'Close'
+      downloadActivityLog() {
+        const rows = this.filteredActivity
+        if (!rows.length) { alert('No entries to download'); return }
+        const headers = ['Date','Action','Wallet','Device MAC','Details']
+        const lines = [headers.join(',')]
+        rows.forEach(r => {
+          lines.push([
+            this.formatDate(r.created_at),
+            r.action,
+            r.wallet_id || '',
+            r.device_mac || '',
+            '"' + (r.details || '').replace(/"/g, '""') + '"'
+          ].join(','))
         })
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = 'tnaflasher-activity-' + new Date().toISOString().slice(0,10) + '.csv'
+        a.click()
+      },
+
+      confirmClearLog() {
+        this.$q.dialog({
+          title: 'Clear Activity Log',
+          message: 'This will permanently delete all log entries. Are you sure?',
+          cancel: true,
+          persistent: true
+        }).onOk(async () => {
+          try {
+            await LNbits.api.request(
+              'DELETE',
+              '/tnaflasher/api/v1/advanced/audit-log',
+              this.g.user.wallets[0].adminkey
+            )
+            this.activityLog = []
+          } catch(e) {
+            alert('Failed to clear log: ' + e.message)
+          }
+        })
+      },
+
+      getActionColor(action) {
+        const colors = {
+          flash_paid: 'positive', flash_complete: 'green',
+          connect: 'info',
+          erase_flash: 'negative', erase_partition: 'negative', erase_region: 'negative',
+          write_flash: 'orange', register_write: 'warning',
+          backup: 'purple', partition_backup: 'purple',
+          partition_scan: 'grey', register_read: 'grey',
+          firmware_detection: 'teal', filesystem_inspect: 'teal',
+          nvs_inspect: 'teal', spiffs_inspect: 'teal', apps_detect: 'teal',
+        }
+        return colors[action] || 'grey'
       }
     },
 
     async created() {
-      // Wait for windowMixin to populate this.g.user before initializing
-      if (this.g?.user?.wallets?.length) {
-        await this.initData()
-      }
-    },
-
-    watch: {
-      'g.user': {
-        async handler(val) {
-          if (val?.wallets?.length) {
-            await this.initData()
-          }
-        },
-        immediate: true
-      }
+      if (!this.g?.user?.wallets?.length) return
+      this.walletOptions = this.g.user.wallets.map(w => ({ label: w.name, value: w.id }))
+      try { await this.loadStats() } catch(e) { console.error('loadStats', e) }
+      try { await this.loadWallet() } catch(e) { console.error('loadWallet', e) }
+      try { await this.loadMiners() } catch(e) { console.error('loadMiners', e) }
+      try { await this.loadBulletins() } catch(e) { console.error('loadBulletins', e) }
+      try { await this.loadPromoCodes() } catch(e) { console.error('loadPromoCodes', e) }
+      try { await this.loadFeatureFlags() } catch(e) { console.error('loadFeatureFlags', e) }
+      try { await this.loadActivityLog() } catch(e) { console.error('loadActivityLog', e) }
     }
   })
 
