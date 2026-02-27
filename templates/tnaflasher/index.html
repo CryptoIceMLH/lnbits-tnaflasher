@@ -464,20 +464,26 @@
           </div>
           <div class="col-12">
             <div style="font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 12px;">
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_device_info" @update:model-value="toggleFeature('feature_device_info')" size="sm" label="Device Info Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_partitions" @update:model-value="toggleFeature('feature_partitions')" size="sm" label="Partitions Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_backup" @update:model-value="toggleFeature('feature_backup')" size="sm" label="Backup/Download Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_filesystem_read" @update:model-value="toggleFeature('feature_filesystem_read')" size="sm" label="Filesystem Read" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_filesystem_write" @update:model-value="toggleFeature('feature_filesystem_write')" size="sm" label="Filesystem Write" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_serial_monitor" @update:model-value="toggleFeature('feature_serial_monitor')" size="sm" label="Serial Monitor Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_firmware_detection" @update:model-value="toggleFeature('feature_firmware_detection')" size="sm" label="Firmware Detection Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_register_read" @update:model-value="toggleFeature('feature_register_read')" size="sm" label="Register Read" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_register_write" @update:model-value="toggleFeature('feature_register_write')" size="sm" label="Register Write" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_flash_tools" @update:model-value="toggleFeature('feature_flash_tools')" size="sm" label="Flash Tools Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_nvs" @update:model-value="toggleFeature('feature_nvs')" size="sm" label="NVS Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_spiffs" @update:model-value="toggleFeature('feature_spiffs')" size="sm" label="SPIFFS Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_apps" @update:model-value="toggleFeature('feature_apps')" size="sm" label="Apps Tab" /></div>
-              <div class="q-mb-sm"><q-checkbox v-model="featureFlags.feature_audit_logging" @update:model-value="toggleFeature('feature_audit_logging')" size="sm" label="Audit Logging" /></div>
+              <div class="row">
+                <div class="col-6">
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_device_info" @update:model-value="toggleFeature('feature_device_info')" size="sm" label="Device Info Tab" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_partitions" @update:model-value="toggleFeature('feature_partitions')" size="sm" label="Partitions Tab" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_backup" @update:model-value="toggleFeature('feature_backup')" size="sm" label="Backup/Download Tab" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_filesystem_read" @update:model-value="toggleFeature('feature_filesystem_read')" size="sm" label="Filesystem Read" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_filesystem_write" @update:model-value="toggleFeature('feature_filesystem_write')" size="sm" label="Filesystem Write" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_serial_monitor" @update:model-value="toggleFeature('feature_serial_monitor')" size="sm" label="Serial Monitor Tab" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_firmware_detection" @update:model-value="toggleFeature('feature_firmware_detection')" size="sm" label="Firmware Detection Tab" /></div>
+                </div>
+                <div class="col-6">
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_register_read" @update:model-value="toggleFeature('feature_register_read')" size="sm" label="Register Read" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_register_write" @update:model-value="toggleFeature('feature_register_write')" size="sm" label="Register Write" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_flash_tools" @update:model-value="toggleFeature('feature_flash_tools')" size="sm" label="Flash Tools Tab" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_nvs" @update:model-value="toggleFeature('feature_nvs')" size="sm" label="NVS Tab" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_spiffs" @update:model-value="toggleFeature('feature_spiffs')" size="sm" label="SPIFFS Tab" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_apps" @update:model-value="toggleFeature('feature_apps')" size="sm" label="Apps Tab" /></div>
+                  <div class="q-mb-xs"><q-checkbox v-model="featureFlags.feature_audit_logging" @update:model-value="toggleFeature('feature_audit_logging')" size="sm" label="Audit Logging" /></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1199,13 +1205,16 @@
         const colors = {
           flash_paid: 'positive', flash_complete: 'green',
           invoice_created: 'blue', firmware_download: 'cyan',
-          connect: 'info',
+          device_connect: 'info', connect: 'info',
+          serial_monitor_start: 'blue-grey', serial_monitor_stop: 'blue-grey',
+          register_read: 'grey',
           erase_flash: 'negative', erase_partition: 'negative', erase_region: 'negative',
           write_flash: 'orange', register_write: 'warning',
           backup: 'purple', partition_backup: 'purple',
-          partition_scan: 'grey', register_read: 'grey',
+          partition_scan: 'grey',
           firmware_detection: 'teal', filesystem_inspect: 'teal',
           nvs_inspect: 'teal', spiffs_inspect: 'teal', apps_detect: 'teal',
+          file_upload_attempt: 'orange',
         }
         return colors[action] || 'grey'
       }

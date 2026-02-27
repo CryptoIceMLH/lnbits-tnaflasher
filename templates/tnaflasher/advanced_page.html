@@ -1581,6 +1581,9 @@
 
                         // Read partitions
                         await this.readPartitions();
+
+                        // Log successful connection
+                        await this.logAudit('device_connect', `Connected to ${chipName} (MAC: ${this.deviceInfo.mac}, Flash: ${this.deviceInfo.flashSize})`, this.deviceInfo.mac);
                     } catch (err) {
                         alert('Failed to connect: ' + err.message);
                         this.isConnected = false;
@@ -1608,6 +1611,11 @@
                         }
                         if (!tableData) { this.partitions = []; return; }
                         this.partitions = this.parsePartitionTable(new Uint8Array(tableData));
+
+                        // Log partition scan
+                        const appCount = this.partitions.filter(p => p.type === 'app').length;
+                        const dataCount = this.partitions.filter(p => p.type === 'data').length;
+                        await this.logAudit('partition_scan', `Partition table scanned: ${this.partitions.length} total partitions (${appCount} app, ${dataCount} data)`, this.deviceInfo.mac);
                     } catch (err) {
                         console.error('Failed to read partitions:', err);
                         this.partitions = [];
@@ -1695,7 +1703,7 @@
                         URL.revokeObjectURL(url);
 
                         this.filesystemMessage = `${fsType} partition (${this.formatBytes(part.size)}) downloaded as ${part.label}-${fsType}.bin. Use esptool.py or LittleFS tools to inspect files.`;
-                        await this.logAudit('filesystem_inspect', `Filesystem partition ${part.label} read`, this.deviceInfo.mac);
+                        await this.logAudit('filesystem_inspect', `Filesystem partition ${part.label} (${fsType}, ${this.formatBytes(part.size)}) inspected`, this.deviceInfo.mac);
                     } catch(e) {
                         alert('Failed to read filesystem: ' + e.message);
                     }
@@ -1719,7 +1727,7 @@
                                     return;
                                 }
                                 alert('File upload not yet fully implemented - requires write flash capability');
-                                await this.logAudit('file_upload_attempt', `Attempted upload to ${partition.label}`, this.deviceInfo.mac);
+                                await this.logAudit('file_upload_attempt', `Attempted upload ${this.selectedFile.name} (${this.formatBytes(this.selectedFile.size)}) to ${partition.label}`, this.deviceInfo.mac);
                             } catch (err) {
                                 alert('Upload failed: ' + err.message);
                             }
@@ -1750,7 +1758,7 @@
                         setTimeout(() => this.backupProgress = 0, 1000);
 
                         // Log to audit
-                        await this.logAudit('backup', 'Full flash backup downloaded', this.deviceInfo.mac);
+                        await this.logAudit('backup', `Full flash backup downloaded (${this.deviceInfo.chipName}, ${this.deviceInfo.flashSize})`, this.deviceInfo.mac);
                     } catch (err) {
                         alert('Backup failed: ' + err.message);
                         this.backupProgress = 0;
@@ -1772,7 +1780,7 @@
                         this.downloadBinary(data, `${partition.label}_backup.bin`);
                         this.partitionBackupProgress = 100;
                         setTimeout(() => this.partitionBackupProgress = 0, 1000);
-                        await this.logAudit('partition_backup', `Backed up partition: ${partition.label}`, this.deviceInfo.mac);
+                        await this.logAudit('partition_backup', `Backed up partition: ${partition.label} (offset: 0x${partition.offset.toString(16)}, size: ${this.formatBytes(partition.size)}, type: ${partition.subtype})`, this.deviceInfo.mac);
                     } catch (err) {
                         alert('Partition backup failed: ' + err.message);
                         this.partitionBackupProgress = 0;
@@ -1832,6 +1840,9 @@
                         port.readable.pipeTo(decoder.writable, { signal: this.serialPipeAbort.signal }).catch(() => {});
                         this.serialReader = decoder.readable.getReader();
 
+                        // Log serial monitor started
+                        await this.logAudit('serial_monitor_start', `Serial monitor started at ${this.baudRate} baud (${this.deviceInfo.chipName})`, this.deviceInfo.mac);
+
                         this.readSerialLoop();
                     } catch (err) {
                         this.serialOutput += `[Error: ${err.message}]\n`;
@@ -1876,6 +1887,9 @@
                     this.serialMonitorMode = false;
                     this.needsReconnect = true;
                     this.serialOutput += '\n[Serial monitor stopped — click "Reconnect" to restore flash operations]\n';
+
+                    // Log serial monitor stopped
+                    await this.logAudit('serial_monitor_stop', `Serial monitor stopped (${this.deviceInfo.chipName})`, this.deviceInfo.mac);
                 },
                 async sendSerialCommand() {
                     if (!this.serialActive || !this.serialCommand) return;
@@ -1910,6 +1924,9 @@
                         }
                         const val = await this.loader.readRegister(addr);
                         this.regValue = '0x' + (val >>> 0).toString(16).toUpperCase().padStart(8, '0');
+
+                        // Log register read
+                        await this.logAudit('register_read', `Read register 0x${addr.toString(16)} = ${this.regValue}`, this.deviceInfo.mac);
                     } catch (err) {
                         alert('Failed to read register: ' + err.message);
                     }
@@ -1944,14 +1961,14 @@
                             await this.loader.eraseFlash();
                             this.eraseProgress = 100;
                             alert('Flash erased successfully');
-                            await this.logAudit('erase_flash', 'Full flash erase', this.deviceInfo.mac);
+                            await this.logAudit('erase_flash', `Full flash erase (${this.deviceInfo.chipName}, ${this.deviceInfo.flashSize})`, this.deviceInfo.mac);
                         } else if (this.eraseMode === 'partition') {
                             const partition = this.partitions.find(p => p.label === this.erasePartitionSelected);
                             if (!partition) { alert('Partition not found'); return; }
                             await this.loader.eraseRegion(partition.offset, partition.size);
                             this.eraseProgress = 100;
                             alert(`Partition ${partition.label} erased`);
-                            await this.logAudit('erase_partition', `Erased: ${partition.label}`, this.deviceInfo.mac);
+                            await this.logAudit('erase_partition', `Erased partition: ${partition.label} (offset: 0x${partition.offset.toString(16)}, size: ${this.formatBytes(partition.size)})`, this.deviceInfo.mac);
                         } else if (this.eraseMode === 'region') {
                             const offset = parseInt(this.eraseRegionOffset, 16);
                             const length = parseInt(this.eraseRegionLength, 16);
@@ -1982,7 +1999,7 @@
                                 await this.loader.writeFlash({ fileArray: [{ data, address: addr }], flashSize: 'keep' });
                                 this.writeProgress = 100;
                                 alert('Flash write successful');
-                                await this.logAudit('write_flash', `Wrote ${data.length} bytes at 0x${addr.toString(16)}`, this.deviceInfo.mac);
+                                await this.logAudit('write_flash', `Wrote ${this.writeFile.name} (${data.length} bytes) at 0x${addr.toString(16)}`, this.deviceInfo.mac);
                             } catch (err) {
                                 alert('Write failed: ' + err.message);
                             } finally {
@@ -2006,7 +2023,7 @@
                         if (!nvsPart) { alert('NVS partition not found'); return; }
                         const raw = await this.loader.readFlash(nvsPart.offset, nvsPart.size);
                         this.nvsData = this.parseNVS(new Uint8Array(raw));
-                        await this.logAudit('nvs_inspect', 'NVS partition inspected', this.deviceInfo.mac);
+                        await this.logAudit('nvs_inspect', `NVS partition inspected (${this.nvsData.count} entries)`, this.deviceInfo.mac);
                     } catch(e) { alert('NVS load failed: ' + e.message); }
                     finally { this.nvsLoading = false; }
                 },
@@ -2079,7 +2096,7 @@
                             this.spiffsMessage = `Raw partition (${this.formatBytes(spiffsData.byteLength)}) downloaded as ${spiffsPart.label}-partition.bin. Use esptool.py or ESP-IDF to inspect files.`;
                         }
                         this.spiffsLoadingProgress = 100;
-                        await this.logAudit('spiffs_inspect', 'SPIFFS partition inspected', this.deviceInfo.mac);
+                        await this.logAudit('spiffs_inspect', `SPIFFS partition inspected (${spiffsPart.label}, ${this.spiffsFiles.length} files)`, this.deviceInfo.mac);
                     } catch (err) {
                         alert('SPIFFS load failed: ' + err.message);
                     } finally {
@@ -2114,7 +2131,7 @@
                                 }
                             } catch(e) {}
                         }
-                        await this.logAudit('apps_detect', `Detected ${this.detectedApps.length} apps`, this.deviceInfo.mac);
+                        await this.logAudit('apps_detect', `Detected ${this.detectedApps.length} apps: ${this.detectedApps.map(a => a.name + (a.version ? ' v' + a.version : '')).join(', ')}`, this.deviceInfo.mac);
                     } catch(e) { alert('App detection failed: ' + e.message); }
                     finally { this.appsLoading = false; }
                 },
@@ -2176,7 +2193,7 @@
                             this.detectionOutput += 'No valid firmware image found in app partitions.\n';
                         }
                         this.detectionAttempted = true;
-                        await this.logAudit('firmware_detection', 'Firmware scan performed', this.deviceInfo.mac);
+                        await this.logAudit('firmware_detection', `Firmware detection: ${this.detectedFirmware ? this.detectedFirmware.name + ' v' + this.detectedFirmware.version : 'not found'}`, this.deviceInfo.mac);
                     } catch(e) {
                         this.detectionOutput += 'Detection failed: ' + e.message + '\n';
                         this.detectionAttempted = true;
