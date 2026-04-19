@@ -37,21 +37,26 @@ SSH_PASS = "root"
 SSH_PORT = 22
 
 def upload_via_dd(ssh, data, remote_path):
-    """Upload file via dd — same approach as standalone flash.py, works on Dropbear."""
+    """Upload file via dd with streaming send — works on Dropbear SSH."""
     parent = '/'.join(remote_path.split('/')[:-1])
     if parent:
         ssh.exec_command(f'mkdir -p {parent}')
         time.sleep(0.1)
 
+    total = len(data)
     chan = ssh.get_transport().open_session()
-    chan.exec_command(f'dd of={remote_path} bs=1 count={len(data)} 2>/dev/null')
+    # bs=total count=1 tells dd exactly how many bytes to expect
+    chan.exec_command(f'dd of={remote_path} bs={total} count=1 2>/dev/null')
     sent = 0
-    while sent < len(data):
-        n = chan.send(data[sent:])
+    while sent < total:
+        # send() returns how many bytes were accepted — loop until all sent
+        n = chan.send(data[sent:sent + 32768])
+        if n == 0:
+            time.sleep(0.05)
+            continue
         sent += n
     chan.shutdown_write()
-    time.sleep(1)
-    chan.recv(1024)
+    chan.recv_exit_status()
     chan.close()
 
 def main():
