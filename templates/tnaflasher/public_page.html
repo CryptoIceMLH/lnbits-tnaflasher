@@ -322,7 +322,7 @@
                   emit-value
                   map-options
                   dropdown-icon="none"
-                  :disable="(!isSSHDevice && !connected) || paid"
+                  :disable="paid"
                   @update:model-value="onDeviceChange"
                 >
                   <template v-slot:append>
