@@ -28,7 +28,7 @@ except ImportError:
     sys.exit(1)
 
 # ── Configuration ──
-SERVER_URL = "https://flash.tna-os.com"  # LNBits server URL (set by agent)
+SERVER_URL = "https://lnbits.molonlabe.holdings"
 SSH_USER = "root"
 SSH_PASS = "root"
 SSH_PORT = 22

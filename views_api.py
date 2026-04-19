@@ -339,22 +339,15 @@ async def api_download_single_file(
 
 
 @tnaflasher_api_router.get("/tools/tna-flash.py")
-async def api_get_flash_tool(request: Request):
-    """Download the TNA flash tool script with SERVER_URL injected from request host"""
+async def api_get_flash_tool():
+    """Download the TNA flash tool script"""
     tool_path = Path(__file__).parent / "static" / "tools" / "tna-flash.py"
     if not tool_path.exists():
         raise HTTPException(status_code=404, detail="Flash tool not found")
-    server_url = str(request.base_url).rstrip("/")
-    content = tool_path.read_text(encoding="utf-8")
-    content = content.replace(
-        'SERVER_URL = "https://flash.tna-os.com"',
-        f'SERVER_URL = "{server_url}"'
-    )
-    from fastapi.responses import PlainTextResponse
-    return PlainTextResponse(
-        content=content,
-        media_type="text/x-python",
-        headers={"Content-Disposition": 'attachment; filename="tna-flash.py"'}
+    return FileResponse(
+        path=tool_path,
+        filename="tna-flash.py",
+        media_type="text/x-python"
     )
 
 
