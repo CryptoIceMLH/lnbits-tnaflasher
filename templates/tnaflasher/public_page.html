@@ -567,7 +567,7 @@
                 <div class="text-caption text-tna-muted q-mb-sm">Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span></div>
               </div>
               <div class="text-center q-mb-md">
-                <q-btn outline icon="content_copy" label="Copy Code" @click="copyFlashCode" color="orange" />
+                <q-btn outline label="📋 Copy Code" @click="copyFlashCode" color="orange" />
               </div>
 
               <q-separator class="q-my-md" />
@@ -576,8 +576,7 @@
               <div class="text-center q-mb-md">
                 <q-btn
                   color="primary"
-                  icon="download"
-                  label="Download Flash Tool (tna-flash.py)"
+                  label="⬇ Download Flash Tool (tna-flash.py)"
                   :href="flashToolUrl"
                   target="_blank"
                   size="md"
