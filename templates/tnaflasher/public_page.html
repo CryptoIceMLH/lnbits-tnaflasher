@@ -558,49 +558,39 @@
             </div>
 
             <!-- Flash code received -->
-            <div v-if="flashCode">
-
-              <!-- Code box -->
-              <div class="text-center q-mb-sm">
-                <div class="text-caption text-tna-muted q-mb-xs">Your one-time flash code</div>
-                <div class="text-h3 text-weight-bold text-tna-accent q-mb-xs" style="letter-spacing: 6px; font-family: monospace;">${ flashCode }</div>
-                <div class="text-caption text-tna-muted q-mb-sm">Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span></div>
+            <div v-if="flashCode" class="text-center">
+              <div class="text-subtitle1 text-tna-secondary q-mb-md">Your Flash Code:</div>
+              <div class="text-h3 text-weight-bold text-tna-accent q-mb-sm" style="letter-spacing: 4px; font-family: monospace;">
+                ${ flashCode }
               </div>
-              <div class="text-center q-mb-md">
-                <q-btn outline label="📋 Copy Code" @click="copyFlashCode" color="orange" />
-              </div>
+              <q-btn flat dense label="Copy Code" @click="copyFlashCode" class="text-tna-accent q-mb-md" />
 
-              <q-separator class="q-my-md" />
-
-              <!-- Download -->
-              <div class="text-center q-mb-md">
-                <q-btn
-                  color="primary"
-                  label="⬇ Download Flash Tool (tna-flash.py)"
-                  :href="flashToolUrl"
-                  target="_blank"
-                  size="md"
-                />
+              <div class="text-caption text-tna-muted q-mb-lg">
+                Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span>
               </div>
 
-              <q-separator class="q-my-md" />
-
-              <!-- Instructions -->
-              <div class="text-weight-bold text-tna-accent q-mb-sm">How to flash:</div>
-              <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height: 2.2;">
-                <li>Download the flash tool above</li>
-                <li>Open Command Prompt / PowerShell and run:<br>
-                  <code style="background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 3px;">pip install paramiko requests</code>
-                </li>
-                <li>Run: <code style="background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 3px;">python tna-flash.py</code></li>
-                <li>Enter your miner's IP and the code above when prompted</li>
-                <li>Wait for completion, then <strong class="text-tna-accent">power cycle</strong> your miner</li>
-              </ol>
-
-              <div class="text-center q-mt-lg">
-                <q-btn flat dense label="Flash Another Device" @click="resetAll" class="text-tna-muted" />
+              <div class="q-pa-md q-mb-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px; text-align: left;">
+                <div class="text-weight-bold text-tna-accent q-mb-sm">Instructions:</div>
+                <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height: 2;">
+                  <li>Download the flash tool: <a :href="flashToolUrl" class="text-tna-accent" style="text-decoration: underline;" target="_blank">tna-flash.py</a></li>
+                  <li>Install requirements: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">pip install paramiko requests</code></li>
+                  <li>Run: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">python tna-flash.py</code></li>
+                  <li>Enter your miner's IP address and the flash code above</li>
+                  <li>Wait for the flash to complete, then <strong class="text-tna-accent">power cycle</strong> your miner</li>
+                </ol>
               </div>
 
+              <q-btn
+                color="primary"
+                label="Download Flash Tool"
+                :href="flashToolUrl"
+                target="_blank"
+                size="lg"
+              />
+
+              <div class="q-mt-lg">
+                <q-btn flat label="Flash Another Device" @click="resetAll" class="text-tna-accent" />
+              </div>
             </div>
 
             <!-- Not paid yet placeholder -->
