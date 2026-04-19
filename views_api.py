@@ -287,16 +287,20 @@ async def api_list_firmware_files(
     code: str = Query(...),
     request: Request = None
 ):
-    """Return list of files in the firmware tar, authenticated by flash code."""
-    result = await verify_flash_code(code.upper(), check_used=False)
+    """Return list of files in the firmware tar and mark code as used."""
+    result = await verify_flash_code(code.upper())
     if not result.get("valid"):
-        raise HTTPException(status_code=403, detail="Invalid or expired flash code")
+        raise HTTPException(status_code=403, detail=result.get("error", "Invalid or expired flash code"))
 
     device = result["device"]
     version = result["version"]
     firmware_path = await get_firmware_path(device, version)
     if not firmware_path:
         raise HTTPException(status_code=404, detail="Firmware not found")
+
+    # Mark code used so it can't be reused
+    client_ip = request.client.host if request and request.client else "unknown"
+    await mark_flash_code_used(code.upper(), client_ip)
 
     import tarfile
     with tarfile.open(str(firmware_path), "r:gz") as tar:
