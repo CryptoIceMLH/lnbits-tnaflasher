@@ -288,19 +288,53 @@
           </q-card-section>
         </q-card>
 
-        <!-- Step 1: ASIC Miner (SSH) - No USB connection needed -->
-        <q-card v-if="walletValid && devices.length > 0 && isSSHDevice" class="q-mb-md tna-card">
-          <q-card-section>
-            <div class="row items-center q-mb-md">
-              <q-badge color="primary" class="q-mr-sm">1</q-badge>
-              <span class="text-h6 text-tna-primary">ASIC Miner (SSH Flash)</span>
-            </div>
-            <div class="text-tna-secondary">
-              This device flashes over your local network via SSH.<br>
-              After payment, you will receive a <strong class="text-tna-accent">one-time flash code</strong> to use with the TNA flash tool on your PC.
-            </div>
-          </q-card-section>
-        </q-card>
+        <!-- Step 1: USB & SSH Cards Side by Side -->
+        <div class="row q-col-gutter-md q-mb-md">
+          <!-- Step 1: Connect Device (WebSerial) -->
+          <div class="col-12 col-md-6">
+            <q-card class="tna-card" style="height: 100%;">
+              <q-card-section>
+                <div class="row items-center q-mb-md">
+                  <q-badge color="primary" class="q-mr-sm">1</q-badge>
+                  <span class="text-h6 text-tna-primary">Connect USB</span>
+                </div>
+
+                <div v-if="!connected">
+                  <q-btn
+                    color="primary"
+                    label="Connect via USB"
+                    @click="connectDevice"
+                    :loading="connecting"
+                    :disable="!isChromium"
+                  />
+                </div>
+
+                <div v-else class="row items-center">
+                  <span class="q-mr-sm status-connected" style="font-size: 1.2em;">✓</span>
+                  <span class="status-connected">Connected: ${ chipInfo }</span>
+                  <q-space />
+                  <q-btn flat dense color="negative" label="Disconnect" @click="disconnectDevice" />
+                </div>
+              </q-card-section>
+            </q-card>
+          </div>
+
+          <!-- Step 1: ASIC Miner (SSH) -->
+          <div class="col-12 col-md-6">
+            <q-card class="tna-card" style="height: 100%; background: rgba(33, 150, 243, 0.1); border: 1px solid #2196F3;">
+              <q-card-section>
+                <div class="row items-center q-mb-md">
+                  <q-badge color="info" class="q-mr-sm">1</q-badge>
+                  <span class="text-h6 text-tna-primary">SSH (Network)</span>
+                </div>
+                <div class="text-tna-secondary text-caption">
+                  <strong>ASIC Miner</strong> — flashes over your local network.<br>
+                  No USB needed. After payment, get a one-time flash code for your PC tool.
+                </div>
+              </q-card-section>
+            </q-card>
+          </div>
+        </div>
 
         <!-- Step 2: Select Device & Firmware -->
         <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !isSSHDevice && !connected }">
