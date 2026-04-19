@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Query, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import FileResponse
 from lnbits.core.models import User
 from lnbits.decorators import check_admin
@@ -22,6 +22,7 @@ from .models import (
     UpdateFirmware,
     CreateAuditLog,
     AuditLogsResponse,
+    VerifyCodeResponse,
 )
 from .crud import (
     get_all_flash_requests,
@@ -57,6 +58,10 @@ from .crud import (
     get_feature_flags,
     set_feature_flag,
     get_audit_log,
+    get_flash_code_by_code,
+    mark_flash_code_used,
+    check_rate_limit,
+    record_rate_limit_attempt,
 )
 from .services import (
     get_available_devices,
@@ -65,6 +70,7 @@ from .services import (
     get_firmware_path,
     get_firmware_dir,
     verify_flash_token,
+    verify_flash_code,
 )
 
 tnaflasher_api_router = APIRouter(prefix="/api/v1")
@@ -121,7 +127,10 @@ async def api_get_status(payment_hash: str) -> FlashStatusResponse:
     result = await get_flash_status(payment_hash)
     return FlashStatusResponse(
         status=result.get("status", "not_found"),
-        token=result.get("token")
+        token=result.get("token"),
+        flash_code=result.get("flash_code"),
+        flash_code_expires_at=result.get("flash_code_expires_at"),
+        flash_method=result.get("flash_method"),
     )
 
 
@@ -201,6 +210,91 @@ async def api_mark_complete(
     return {"success": True}
 
 
+# ============== Flash Code Endpoints (ASIC/SSH) ==============
+
+@tnaflasher_api_router.get("/flash/verify-code")
+async def api_verify_flash_code(
+    code: str = Query(...),
+    request: Request = None
+) -> VerifyCodeResponse:
+    """Verify a flash code (called by tna-flash.py tool)"""
+    # Rate limiting
+    client_ip = request.client.host if request and request.client else "unknown"
+    within_limit = await check_rate_limit(client_ip, "verify-code", max_attempts=5, window_seconds=3600)
+    if not within_limit:
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+    await record_rate_limit_attempt(client_ip, "verify-code")
+
+    # Verify the code
+    result = await verify_flash_code(code.upper())
+    return VerifyCodeResponse(
+        valid=result.get("valid", False),
+        device=result.get("device"),
+        version=result.get("version"),
+        error=result.get("error")
+    )
+
+
+@tnaflasher_api_router.get("/flash/download")
+async def api_download_firmware_by_code(
+    code: str = Query(...),
+    request: Request = None
+):
+    """Download firmware using a flash code (called by tna-flash.py tool)"""
+    # Verify code is valid
+    result = await verify_flash_code(code.upper())
+    if not result.get("valid"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Invalid code"))
+
+    # Get firmware file path
+    device = result["device"]
+    version = result["version"]
+    firmware_path = await get_firmware_path(device, version)
+    if not firmware_path:
+        raise HTTPException(status_code=404, detail="Firmware not found")
+
+    # Mark code as used
+    client_ip = request.client.host if request and request.client else "unknown"
+    await mark_flash_code_used(code.upper(), client_ip)
+
+    # Resolve miner name for audit log
+    miner = await get_miner(device)
+    miner_name = miner.name if miner else device
+
+    # Audit log
+    flash_code_obj = await get_flash_code_by_code(code.upper())
+    payment_ref = flash_code_obj.payment_hash[:16] if flash_code_obj else "unknown"
+    await create_audit_log(
+        wallet_id="public",
+        action="firmware_download",
+        details=f"Device: {miner_name}, Version: {version}, Code: {code.upper()}, Ref: {payment_ref}...",
+        device_mac=None
+    )
+
+    # Determine media type based on file extension
+    media_type = "application/gzip" if str(firmware_path).endswith((".tar.gz", ".tgz")) else "application/octet-stream"
+    filename = firmware_path.name
+
+    return FileResponse(
+        path=firmware_path,
+        filename=filename,
+        media_type=media_type
+    )
+
+
+@tnaflasher_api_router.get("/tools/tna-flash.py")
+async def api_get_flash_tool():
+    """Download the TNA flash tool script (public — useless without a paid flash code)"""
+    tool_path = Path(__file__).parent / "static" / "tools" / "tna-flash.py"
+    if not tool_path.exists():
+        raise HTTPException(status_code=404, detail="Flash tool not found")
+    return FileResponse(
+        path=tool_path,
+        filename="tna-flash.py",
+        media_type="text/x-python"
+    )
+
+
 # ============== Admin Endpoints ==============
 
 @tnaflasher_api_router.get("/admin/requests")
@@ -269,7 +363,7 @@ async def api_admin_create_miner(
     if not data.name or len(data.name.strip()) == 0:
         raise HTTPException(status_code=400, detail="Miner name is required")
 
-    miner = await create_miner(data.name.strip())
+    miner = await create_miner(data.name.strip(), data.flash_method)
     return miner.dict()
 
 
@@ -335,9 +429,15 @@ async def api_admin_upload_firmware(
     if existing:
         raise HTTPException(status_code=400, detail=f"Firmware version {version} already exists for this miner")
 
-    # Validate file extension
-    if not file.filename.endswith(".bin"):
-        raise HTTPException(status_code=400, detail="File must be a .bin file")
+    # Validate file extension based on flash method
+    if miner.flash_method == "ssh":
+        if not file.filename.endswith(".tar.gz") and not file.filename.endswith(".tgz"):
+            raise HTTPException(status_code=400, detail="SSH miners require .tar.gz firmware files")
+        file_ext = ".tar.gz"
+    else:
+        if not file.filename.endswith(".bin"):
+            raise HTTPException(status_code=400, detail="WebSerial miners require .bin firmware files")
+        file_ext = ".bin"
 
     # Create miner directory if needed
     firmware_dir = get_firmware_dir()
@@ -345,7 +445,7 @@ async def api_admin_upload_firmware(
     miner_dir.mkdir(parents=True, exist_ok=True)
 
     # Save the file
-    file_path = miner_dir / f"{version}.bin"
+    file_path = miner_dir / f"{version}{file_ext}"
     content = await file.read()
     file_path.write_bytes(content)
 
@@ -354,7 +454,7 @@ async def api_admin_upload_firmware(
         miner_id=miner_id,
         version=version,
         price_sats=price_sats,
-        file_path=f"{miner_id}/{version}.bin",
+        file_path=f"{miner_id}/{version}{file_ext}",
         notes=notes,
         discount_enabled=discount_enabled
     )

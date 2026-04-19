@@ -145,3 +145,44 @@ async def m007_create_audit_log(db):
             """,
             {"key": key, "value": value}
         )
+
+
+async def m008_add_flash_codes_and_flash_method(db):
+    """Add ASIC miner support: flash_method on miners, flash_codes table, rate_limits table"""
+
+    # Add flash_method column to miners (existing miners default to 'webserial')
+    await db.execute(
+        """
+        ALTER TABLE tnaflasher.miners ADD COLUMN flash_method TEXT DEFAULT 'webserial'
+        """
+    )
+
+    # Create flash_codes table for one-time SSH flash codes
+    await db.execute(
+        """
+        CREATE TABLE tnaflasher.flash_codes (
+            id TEXT PRIMARY KEY,
+            code TEXT UNIQUE NOT NULL,
+            payment_hash TEXT NOT NULL,
+            device TEXT NOT NULL,
+            version TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'unused',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL,
+            used_at TIMESTAMP,
+            used_ip TEXT
+        )
+        """
+    )
+
+    # Create rate_limits table for API endpoint rate limiting
+    await db.execute(
+        """
+        CREATE TABLE tnaflasher.rate_limits (
+            id TEXT PRIMARY KEY,
+            ip_address TEXT NOT NULL,
+            endpoint TEXT NOT NULL,
+            attempted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )

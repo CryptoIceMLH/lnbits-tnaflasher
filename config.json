@@ -1,8 +1,8 @@
 {
   "name": "TNA Flasher",
-  "short_description": "Tech Nerd Army Web Flasher - Pay with Lightning to flash NerdQAxe miners",
+  "short_description": "Tech Nerd Army Web Flasher - Pay with Lightning to flash ESP & ASIC miners",
   "tile": "/tnaflasher/static/images/tnaflasher.png",
-  "version": "4.1.16",
+  "version": "4.2.0",
   "min_lnbits_version": "1.0.0",
   "contributors": [
     {

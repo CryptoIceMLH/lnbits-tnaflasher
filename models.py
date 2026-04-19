@@ -36,6 +36,9 @@ class FlashStatusResponse(BaseModel):
     """Response for flash status check"""
     status: str
     token: Optional[str] = None
+    flash_code: Optional[str] = None
+    flash_code_expires_at: Optional[int] = None
+    flash_method: Optional[str] = None
 
 
 class DeviceInfo(BaseModel):
@@ -124,12 +127,14 @@ class Miner(BaseModel):
     """Miner device type"""
     id: str
     name: str
+    flash_method: str = "webserial"  # "webserial" (ESP32/USB) or "ssh" (ASIC/network)
     created_at: Optional[int] = None
 
 
 class CreateMiner(BaseModel):
     """Data needed to create a miner"""
     name: str
+    flash_method: str = "webserial"
 
 
 class MinersResponse(BaseModel):
@@ -177,7 +182,40 @@ class DeviceWithFirmware(BaseModel):
     """Device with firmware details for public page"""
     id: str
     name: str
+    flash_method: str = "webserial"
     firmware: list[FirmwareInfo]
+
+
+# ============== Flash Code Models (ASIC/SSH) ==============
+
+class FlashCode(BaseModel):
+    """One-time flash code for SSH-based ASIC miner flashing"""
+    id: str
+    code: str
+    payment_hash: str
+    device: str
+    version: str
+    status: str = "unused"  # unused, used, expired
+    created_at: Optional[int] = None
+    expires_at: Optional[int] = None
+    used_at: Optional[int] = None
+    used_ip: Optional[str] = None
+
+
+class FlashCodeResponse(BaseModel):
+    """Response when flash code is generated after payment"""
+    code: str
+    expires_at: int
+    device: str
+    version: str
+
+
+class VerifyCodeResponse(BaseModel):
+    """Response for flash code verification (called by tna-flash.py tool)"""
+    valid: bool
+    device: Optional[str] = None
+    version: Optional[str] = None
+    error: Optional[str] = None
 
 
 # ============== Audit Log Models ==============

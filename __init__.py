@@ -30,9 +30,10 @@ scheduled_tasks: list[asyncio.Task] = []
 
 
 def tnaflasher_start():
-    from .tasks import wait_for_paid_invoices
-    task = create_permanent_unique_task("ext_tnaflasher", wait_for_paid_invoices)
-    scheduled_tasks.append(task)
+    from .tasks import wait_for_paid_invoices, expire_flash_codes_task
+    task1 = create_permanent_unique_task("ext_tnaflasher", wait_for_paid_invoices)
+    task2 = create_permanent_unique_task("ext_tnaflasher_expiry", expire_flash_codes_task)
+    scheduled_tasks.extend([task1, task2])
 
 
 def tnaflasher_stop():

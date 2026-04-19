@@ -261,8 +261,8 @@
           </div>
         </q-banner>
 
-        <!-- Step 1: Connect Device -->
-        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card">
+        <!-- Step 1: Connect Device (WebSerial) -->
+        <q-card v-if="walletValid && devices.length > 0 && !isSSHDevice" class="q-mb-md tna-card">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge color="primary" class="q-mr-sm">1</q-badge>
@@ -288,11 +288,25 @@
           </q-card-section>
         </q-card>
 
-        <!-- Step 2: Select Device & Firmware -->
-        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !connected }">
+        <!-- Step 1: ASIC Miner (SSH) - No USB connection needed -->
+        <q-card v-if="walletValid && devices.length > 0 && isSSHDevice" class="q-mb-md tna-card">
           <q-card-section>
             <div class="row items-center q-mb-md">
-              <q-badge :color="connected ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
+              <q-badge color="primary" class="q-mr-sm">1</q-badge>
+              <span class="text-h6 text-tna-primary">ASIC Miner (SSH Flash)</span>
+            </div>
+            <div class="text-tna-secondary">
+              This device flashes over your local network via SSH.<br>
+              After payment, you will receive a <strong class="text-tna-accent">one-time flash code</strong> to use with the TNA flash tool on your PC.
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Step 2: Select Device & Firmware -->
+        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !isSSHDevice && !connected }">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge :color="(isSSHDevice || connected) ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
               <span class="text-h6 text-tna-primary">Select Firmware</span>
             </div>
 
@@ -308,7 +322,7 @@
                   emit-value
                   map-options
                   dropdown-icon="none"
-                  :disable="!connected || paid"
+                  :disable="(!isSSHDevice && !connected) || paid"
                   @update:model-value="onDeviceChange"
                 >
                   <template v-slot:append>
@@ -327,7 +341,7 @@
                   emit-value
                   map-options
                   dropdown-icon="none"
-                  :disable="!connected || !selectedDevice || paid"
+                  :disable="(!isSSHDevice && !connected) || !selectedDevice || paid"
                   @update:model-value="onVersionChange"
                 >
                   <template v-slot:append>
@@ -344,7 +358,7 @@
                 </div>
               </div>
 
-              <div class="col-12">
+              <div v-if="!isSSHDevice" class="col-12">
                 <q-checkbox
                   v-model="keepConfig"
                   label="Keep existing configuration (WiFi, pool settings, etc.)"
@@ -477,8 +491,8 @@
           </q-card-section>
         </q-card>
 
-        <!-- Step 4: Flash -->
-        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
+        <!-- Step 4: Flash (WebSerial) -->
+        <q-card v-if="walletValid && devices.length > 0 && !isSSHDevice" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
@@ -525,6 +539,64 @@
               <div class="text-h6 status-connected q-mt-sm">Flash Complete!</div>
               <p class="text-tna-muted q-mt-sm">Your device has been flashed successfully.</p>
               <q-btn flat label="Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Step 4: Flash Code (SSH/ASIC) -->
+        <q-card v-if="walletValid && devices.length > 0 && isSSHDevice" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
+              <span class="text-h6 text-tna-primary">Flash Your ASIC Miner</span>
+            </div>
+
+            <!-- Waiting for flash code -->
+            <div v-if="paid && !flashCode" class="text-center q-pa-lg">
+              <q-spinner-dots color="orange" size="2em" />
+              <div class="text-caption text-tna-secondary q-mt-sm">Generating flash code...</div>
+            </div>
+
+            <!-- Flash code received -->
+            <div v-if="flashCode" class="text-center">
+              <div class="text-subtitle1 text-tna-secondary q-mb-md">Your Flash Code:</div>
+              <div class="text-h3 text-weight-bold text-tna-accent q-mb-sm" style="letter-spacing: 4px; font-family: monospace;">
+                ${ flashCode }
+              </div>
+              <q-btn flat dense label="Copy Code" @click="copyFlashCode" class="text-tna-accent q-mb-md" icon="content_copy" />
+
+              <div class="text-caption text-tna-muted q-mb-lg">
+                Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span>
+              </div>
+
+              <div class="q-pa-md q-mb-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px; text-align: left;">
+                <div class="text-weight-bold text-tna-accent q-mb-sm">Instructions:</div>
+                <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height: 2;">
+                  <li>Download the flash tool: <a :href="flashToolUrl" class="text-tna-accent" style="text-decoration: underline;">tna-flash.py</a></li>
+                  <li>Install requirements: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">pip install paramiko requests</code></li>
+                  <li>Run: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">python tna-flash.py</code></li>
+                  <li>Enter your miner's IP address and the flash code above</li>
+                  <li>Wait for the flash to complete, then <strong class="text-tna-accent">power cycle</strong> your miner</li>
+                </ol>
+              </div>
+
+              <q-btn
+                color="primary"
+                label="Download Flash Tool"
+                :href="flashToolUrl"
+                target="_blank"
+                icon="download"
+                size="lg"
+              />
+
+              <div class="q-mt-lg">
+                <q-btn flat label="Flash Another Device" @click="resetAll" class="text-tna-accent" />
+              </div>
+            </div>
+
+            <!-- Not paid yet placeholder -->
+            <div v-if="!paid" class="text-center text-tna-muted q-pa-md">
+              Complete payment above to receive your flash code.
             </div>
           </q-card-section>
         </q-card>
@@ -662,6 +734,11 @@
           flashComplete: false,
           terminalOutput: [],
 
+          // Flash code (SSH/ASIC devices)
+          flashCode: null,
+          flashCodeExpiresAt: null,
+          flashCodeCountdown: '',
+
           // Notifications
           notification: null
         }
@@ -716,6 +793,18 @@
 
         advancedUrl() {
           return window.location.origin + '/tnaflasher/' + WALLET_ID + '/advanced'
+        },
+
+        selectedDeviceInfo() {
+          return this.devices.find(d => d.id === this.selectedDevice) || null
+        },
+
+        isSSHDevice() {
+          return this.selectedDeviceInfo && this.selectedDeviceInfo.flash_method === 'ssh'
+        },
+
+        flashToolUrl() {
+          return window.location.origin + '/tnaflasher/api/v1/tools/tna-flash.py'
         }
       },
 
@@ -967,10 +1056,19 @@
 
               if (response.data.status === 'paid' || response.data.status === 'flashed') {
                 this.paid = true
-                this.flashToken = response.data.token
                 this.checkingPayment = false
                 clearInterval(this.paymentCheckInterval)
                 clearInterval(this.expiryInterval)
+
+                if (response.data.flash_method === 'ssh' && response.data.flash_code) {
+                  // SSH device — show flash code
+                  this.flashCode = response.data.flash_code
+                  this.flashCodeExpiresAt = response.data.flash_code_expires_at
+                  this.startFlashCodeCountdown()
+                } else {
+                  // WebSerial device — show token
+                  this.flashToken = response.data.token
+                }
                 this.notify('positive', 'Payment received!')
               }
             } catch (e) {
@@ -1064,6 +1162,30 @@
           }
         },
 
+        startFlashCodeCountdown() {
+          this.updateFlashCodeCountdown()
+          this.flashCodeInterval = setInterval(() => this.updateFlashCodeCountdown(), 1000)
+        },
+
+        updateFlashCodeCountdown() {
+          if (!this.flashCodeExpiresAt) return
+          const now = Math.floor(Date.now() / 1000)
+          const remaining = this.flashCodeExpiresAt - now
+          if (remaining <= 0) {
+            this.flashCodeCountdown = 'Expired'
+            if (this.flashCodeInterval) clearInterval(this.flashCodeInterval)
+            return
+          }
+          const minutes = Math.floor(remaining / 60)
+          const seconds = remaining % 60
+          this.flashCodeCountdown = `${minutes}:${seconds.toString().padStart(2, '0')}`
+        },
+
+        copyFlashCode() {
+          navigator.clipboard.writeText(this.flashCode)
+          this.notify('positive', 'Flash code copied!')
+        },
+
         resetAll() {
           this.disconnectDevice()
           this.selectedDevice = null
@@ -1082,6 +1204,11 @@
           this.promoApplied = false
           this.promoDiscount = 0
           this.promoError = ''
+          // Reset flash code (SSH)
+          this.flashCode = null
+          this.flashCodeExpiresAt = null
+          this.flashCodeCountdown = ''
+          if (this.flashCodeInterval) clearInterval(this.flashCodeInterval)
         }
       },
 
@@ -1108,6 +1235,7 @@
       beforeUnmount() {
         if (this.paymentCheckInterval) clearInterval(this.paymentCheckInterval)
         if (this.expiryInterval) clearInterval(this.expiryInterval)
+        if (this.flashCodeInterval) clearInterval(this.flashCodeInterval)
       }
     })
 

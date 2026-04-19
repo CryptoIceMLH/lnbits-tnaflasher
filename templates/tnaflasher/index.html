@@ -281,7 +281,19 @@
               label="Miner Name"
               outlined
               dense
-              placeholder="e.g. Bitaxe, NerdQAxe++"
+              placeholder="e.g. Bitaxe, Antminer S19 XP"
+            />
+          </div>
+          <div class="col-auto">
+            <q-select
+              v-model="newMinerFlashMethod"
+              :options="[{label: 'WebSerial (USB)', value: 'webserial'}, {label: 'SSH (Network)', value: 'ssh'}]"
+              label="Flash Method"
+              outlined
+              dense
+              emit-value
+              map-options
+              style="min-width: 170px;"
             />
           </div>
           <div class="col-auto">
@@ -304,7 +316,12 @@
               <q-icon name="memory" color="orange" />
             </q-item-section>
             <q-item-section>
-              <q-item-label class="text-weight-bold">${ miner.name }</q-item-label>
+              <q-item-label class="text-weight-bold">
+                ${ miner.name }
+                <q-badge :color="miner.flash_method === 'ssh' ? 'blue' : 'orange'" class="q-ml-sm">
+                  ${ miner.flash_method === 'ssh' ? 'SSH' : 'USB' }
+                </q-badge>
+              </q-item-label>
               <q-item-label caption>ID: ${ miner.id.substring(0, 8) }...</q-item-label>
             </q-item-section>
             <q-item-section side>
@@ -420,10 +437,10 @@
                   <div class="col-12 col-sm-3">
                     <q-file
                       v-model="uploadData[miner.id].file"
-                      label="Select .bin file"
+                      :label="miner.flash_method === 'ssh' ? 'Select .tar.gz file' : 'Select .bin file'"
                       outlined
                       dense
-                      accept=".bin"
+                      :accept="miner.flash_method === 'ssh' ? '.tar.gz,.tgz' : '.bin'"
                     >
                       <template v-slot:prepend>
                         <q-icon name="attach_file" />
@@ -599,6 +616,7 @@
         miners: [],
         loadingMiners: false,
         newMinerName: '',
+        newMinerFlashMethod: 'webserial',
         addingMiner: false,
         // Firmware per miner
         minerFirmware: {},
@@ -796,10 +814,11 @@
             'POST',
             '/tnaflasher/api/v1/admin/miners',
             this.g.user.wallets[0].adminkey,
-            { name: this.newMinerName }
+            { name: this.newMinerName, flash_method: this.newMinerFlashMethod }
           )
           this.$q.notify({ type: 'positive', message: 'Miner added!' })
           this.newMinerName = ''
+          this.newMinerFlashMethod = 'webserial'
           await this.loadMiners()
         } catch (e) {
           LNbits.utils.notifyApiError(e)

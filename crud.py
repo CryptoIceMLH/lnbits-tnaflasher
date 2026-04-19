@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import uuid4
 
 from . import db
-from .models import FlashRequest, Bulletin, PromoCode, Miner, Firmware, AuditLog
+from .models import FlashRequest, Bulletin, PromoCode, Miner, Firmware, AuditLog, FlashCode
 
 
 # ============== Flash Requests ==============
@@ -438,22 +438,23 @@ async def delete_promo_code(promo_id: str) -> bool:
 
 # ============== Miners ==============
 
-async def create_miner(name: str) -> Miner:
+async def create_miner(name: str, flash_method: str = "webserial") -> Miner:
     """Create a new miner"""
     miner_id = str(uuid4())
     now = int(time.time())
 
     await db.execute(
         """
-        INSERT INTO tnaflasher.miners (id, name, created_at)
-        VALUES (:id, :name, :created_at)
+        INSERT INTO tnaflasher.miners (id, name, flash_method, created_at)
+        VALUES (:id, :name, :flash_method, :created_at)
         """,
-        {"id": miner_id, "name": name, "created_at": now}
+        {"id": miner_id, "name": name, "flash_method": flash_method, "created_at": now}
     )
 
     return Miner(
         id=miner_id,
         name=name,
+        flash_method=flash_method,
         created_at=now
     )
 
@@ -729,3 +730,146 @@ async def get_audit_log(limit: int = 50) -> list[AuditLog]:
 async def clear_audit_log() -> None:
     """Clear all audit log entries"""
     await db.execute("DELETE FROM tnaflasher.audit_log")
+
+
+# ============== Flash Codes (ASIC/SSH) ==============
+
+async def create_flash_code(
+    code: str,
+    payment_hash: str,
+    device: str,
+    version: str,
+    expires_at: int
+) -> FlashCode:
+    """Create a one-time flash code for SSH-based flashing"""
+    code_id = str(uuid4())
+    now = int(time.time())
+
+    await db.execute(
+        """
+        INSERT INTO tnaflasher.flash_codes
+        (id, code, payment_hash, device, version, status, created_at, expires_at)
+        VALUES (:id, :code, :payment_hash, :device, :version, 'unused', :created_at, :expires_at)
+        """,
+        {
+            "id": code_id,
+            "code": code,
+            "payment_hash": payment_hash,
+            "device": device,
+            "version": version,
+            "created_at": now,
+            "expires_at": expires_at
+        }
+    )
+
+    return FlashCode(
+        id=code_id,
+        code=code,
+        payment_hash=payment_hash,
+        device=device,
+        version=version,
+        status="unused",
+        created_at=now,
+        expires_at=expires_at
+    )
+
+
+async def get_flash_code_by_code(code: str) -> Optional[FlashCode]:
+    """Get a flash code by its code string"""
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.flash_codes WHERE code = :code
+        """,
+        {"code": code.upper()}
+    )
+    return FlashCode(**row) if row else None
+
+
+async def get_flash_code_by_payment_hash(payment_hash: str) -> Optional[FlashCode]:
+    """Get a flash code by its linked payment hash"""
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.flash_codes WHERE payment_hash = :payment_hash
+        """,
+        {"payment_hash": payment_hash}
+    )
+    return FlashCode(**row) if row else None
+
+
+async def mark_flash_code_used(code: str, used_ip: str) -> bool:
+    """Mark a flash code as used after successful firmware download"""
+    now = int(time.time())
+
+    await db.execute(
+        """
+        UPDATE tnaflasher.flash_codes
+        SET status = 'used', used_at = :used_at, used_ip = :used_ip
+        WHERE code = :code AND status = 'unused'
+        """,
+        {"used_at": now, "used_ip": used_ip, "code": code.upper()}
+    )
+    return True
+
+
+async def expire_flash_codes() -> int:
+    """Expire all unused flash codes past their expiry time. Returns count expired."""
+    now = int(time.time())
+
+    result = await db.execute(
+        """
+        UPDATE tnaflasher.flash_codes
+        SET status = 'expired'
+        WHERE status = 'unused' AND expires_at < :now
+        """,
+        {"now": now}
+    )
+    return 0
+
+
+# ============== Rate Limiting ==============
+
+async def check_rate_limit(
+    ip_address: str,
+    endpoint: str,
+    max_attempts: int = 5,
+    window_seconds: int = 3600
+) -> bool:
+    """Check if an IP is within rate limits. Returns True if allowed."""
+    cutoff = int(time.time()) - window_seconds
+
+    row = await db.fetchone(
+        """
+        SELECT COUNT(*) as count FROM tnaflasher.rate_limits
+        WHERE ip_address = :ip AND endpoint = :endpoint AND attempted_at > :cutoff
+        """,
+        {"ip": ip_address, "endpoint": endpoint, "cutoff": cutoff}
+    )
+
+    count = row["count"] if row else 0
+    return count < max_attempts
+
+
+async def record_rate_limit_attempt(ip_address: str, endpoint: str) -> None:
+    """Record a rate limit attempt"""
+    attempt_id = str(uuid4())
+    now = int(time.time())
+
+    await db.execute(
+        """
+        INSERT INTO tnaflasher.rate_limits (id, ip_address, endpoint, attempted_at)
+        VALUES (:id, :ip, :endpoint, :attempted_at)
+        """,
+        {"id": attempt_id, "ip": ip_address, "endpoint": endpoint, "attempted_at": now}
+    )
+
+
+async def cleanup_rate_limits(older_than_seconds: int = 7200) -> None:
+    """Clean up old rate limit entries"""
+    cutoff = int(time.time()) - older_than_seconds
+
+    await db.execute(
+        """
+        DELETE FROM tnaflasher.rate_limits WHERE attempted_at < :cutoff
+        """,
+        {"cutoff": cutoff}
+    )

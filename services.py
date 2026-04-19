@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
 from pathlib import Path
 from typing import Optional
@@ -20,11 +21,16 @@ from .crud import (
     get_firmware_by_miner,
     get_firmware_by_miner_and_version,
     create_audit_log,
+    create_flash_code as crud_create_flash_code,
+    get_flash_code_by_payment_hash,
 )
 
 
 # Token expiry time (5 minutes)
 TOKEN_EXPIRY_SECONDS = 300
+
+# Flash code expiry time (30 minutes)
+FLASH_CODE_EXPIRY_SECONDS = 1800
 
 # Secret for signing tokens (in production, use environment variable)
 TOKEN_SECRET = os.environ.get("TNAFLASHER_SECRET", "change-this-secret-in-production")
@@ -59,6 +65,7 @@ async def get_available_devices() -> list[dict]:
         devices.append({
             "id": miner.id,
             "name": miner.name,
+            "flash_method": miner.flash_method,
             "firmware": firmware_info,
             # Keep versions list for backward compatibility
             "versions": [fw.version for fw in firmware_list]
@@ -154,6 +161,10 @@ async def create_flash_invoice(
         # Increment promo code usage
         if promo_code:
             await increment_promo_usage(promo_code)
+
+        # Generate flash code for SSH devices (ASIC miners)
+        if miner.flash_method == "ssh":
+            await create_flash_code_for_payment(free_hash, device, version)
 
         # No expiry needed for free flashes
         return {
@@ -285,7 +296,31 @@ async def get_flash_status(payment_hash: str) -> dict:
         return {"status": "pending"}
 
     if request.status in ("paid", "flashed"):
-        # Generate token if not already used
+        # Check if this is an SSH device — return flash code instead of token
+        miner = await get_miner(request.device)
+        if miner and miner.flash_method == "ssh":
+            flash_code = await get_flash_code_by_payment_hash(payment_hash)
+            if not flash_code and request.status == "paid":
+                # Race condition: payment confirmed but code not yet generated
+                flash_code_obj = await create_flash_code_for_payment(
+                    payment_hash, request.device, request.version
+                )
+                return {
+                    "status": request.status,
+                    "flash_code": flash_code_obj.code,
+                    "flash_code_expires_at": flash_code_obj.expires_at,
+                    "flash_method": "ssh"
+                }
+            if flash_code:
+                return {
+                    "status": request.status,
+                    "flash_code": flash_code.code,
+                    "flash_code_expires_at": flash_code.expires_at,
+                    "flash_method": "ssh"
+                }
+            return {"status": request.status, "flash_method": "ssh"}
+
+        # WebSerial device — existing token behavior
         if not request.token_used:
             token = generate_flash_token(
                 request.payment_hash,
@@ -297,3 +332,58 @@ async def get_flash_status(payment_hash: str) -> dict:
             return {"status": request.status, "token_used": True}
 
     return {"status": request.status}
+
+
+# ============== Flash Code Functions (ASIC/SSH) ==============
+
+def generate_flash_code() -> str:
+    """Generate a random flash code in format TNA-XXXX-XXXX"""
+    # Exclude ambiguous characters: 0/O, 1/I/L
+    chars = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+    part1 = ''.join(secrets.choice(chars) for _ in range(4))
+    part2 = ''.join(secrets.choice(chars) for _ in range(4))
+    return f"TNA-{part1}-{part2}"
+
+
+async def create_flash_code_for_payment(
+    payment_hash: str,
+    device: str,
+    version: str
+) -> "FlashCode":
+    """Generate and store a flash code after payment confirmation"""
+    code = generate_flash_code()
+    expires_at = int(time.time()) + FLASH_CODE_EXPIRY_SECONDS
+
+    return await crud_create_flash_code(
+        code=code,
+        payment_hash=payment_hash,
+        device=device,
+        version=version,
+        expires_at=expires_at
+    )
+
+
+async def verify_flash_code(code: str) -> dict:
+    """Verify a flash code is valid and unused"""
+    from .crud import get_flash_code_by_code
+
+    flash_code = await get_flash_code_by_code(code)
+
+    if not flash_code:
+        return {"valid": False, "error": "Invalid code"}
+
+    if flash_code.status == "used":
+        return {"valid": False, "error": "Code already used"}
+
+    if flash_code.status == "expired":
+        return {"valid": False, "error": "Code expired"}
+
+    now = int(time.time())
+    if flash_code.expires_at and flash_code.expires_at < now:
+        return {"valid": False, "error": "Code expired"}
+
+    return {
+        "valid": True,
+        "device": flash_code.device,
+        "version": flash_code.version
+    }
