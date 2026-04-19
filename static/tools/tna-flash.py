@@ -37,19 +37,22 @@ SSH_PASS = "root"
 SSH_PORT = 22
 
 def upload_via_dd(ssh, data, remote_path):
-    """Upload file via dd — Dropbear SSH doesn't support cat > for writes."""
+    """Upload file via dd — same approach as standalone flash.py, works on Dropbear."""
     parent = '/'.join(remote_path.split('/')[:-1])
     if parent:
         ssh.exec_command(f'mkdir -p {parent}')
         time.sleep(0.1)
 
     chan = ssh.get_transport().open_session()
-    chan.exec_command(f'dd of={remote_path} bs={len(data)} count=1')
-    chan.sendall(data)
+    chan.exec_command(f'dd of={remote_path} bs=1 count={len(data)} 2>/dev/null')
+    sent = 0
+    while sent < len(data):
+        n = chan.send(data[sent:])
+        sent += n
     chan.shutdown_write()
-    exit_status = chan.recv_exit_status()
-    if exit_status != 0:
-        print(f"  WARNING: dd returned {exit_status} for {remote_path}")
+    time.sleep(1)
+    chan.recv(1024)
+    chan.close()
 
 def main():
     print("=" * 50)
