@@ -8,15 +8,12 @@ Usage:
 Requirements:
     pip install paramiko requests
 
-This tool contains NO firmware. It downloads firmware from the TNA server
-using a one-time flash code obtained after Lightning payment.
+This tool contains NO firmware. It verifies your flash code with the TNA server,
+then has your miner download each firmware file directly from the server via curl.
 """
 
 import sys
-import os
-import io
 import time
-import tarfile
 
 try:
     import paramiko
@@ -36,28 +33,48 @@ SSH_USER = "root"
 SSH_PASS = "root"
 SSH_PORT = 22
 
-def upload_via_dd(ssh, data, remote_path):
-    """Upload file via dd with streaming send — works on Dropbear SSH."""
-    parent = '/'.join(remote_path.split('/')[:-1])
-    if parent:
-        ssh.exec_command(f'mkdir -p {parent}')
-        time.sleep(0.1)
+TNA_INIT_SCRIPT = b"""#!/bin/sh
+MINER_APP=/tna-miner
+case "$1" in
+  start)
+    echo "Starting TNA-OS..."
+    killall httpd 2>/dev/null
+    start-stop-daemon -S -o --background -m --pidfile /var/run/tna-miner.pid \
+        --startas /bin/sh -- -c "exec $MINER_APP > /var/volatile/tna.log 2>&1"
+    sleep 3
+    pgrep -f tna-miner > /dev/null && echo "TNA-OS started"
+    ;;
+  stop)
+    start-stop-daemon -K -q -x $MINER_APP
+    ;;
+  restart)
+    $0 stop; sleep 2; $0 start
+    ;;
+esac
+"""
 
-    total = len(data)
-    chan = ssh.get_transport().open_session()
-    # bs=total count=1 tells dd exactly how many bytes to expect
-    chan.exec_command(f'dd of={remote_path} bs={total} count=1 2>/dev/null')
+
+def ssh_exec(ssh, cmd, timeout=60):
+    stdin, stdout, stderr = ssh.exec_command(cmd, timeout=timeout)
+    stdout.channel.recv_exit_status()
+    return stdout.read().decode("utf-8", errors="replace").strip()
+
+
+def ssh_write_file(ssh, remote_path, data):
+    """Write small binary data via dd — only used for the tiny init script."""
+    transport = ssh.get_transport()
+    channel = transport.open_session()
+    channel.exec_command(f"dd of={remote_path} bs=1 count={len(data)} 2>/dev/null")
     sent = 0
-    while sent < total:
-        # send() returns how many bytes were accepted — loop until all sent
-        n = chan.send(data[sent:sent + 32768])
-        if n == 0:
-            time.sleep(0.05)
-            continue
+    while sent < len(data):
+        n = channel.send(data[sent:])
         sent += n
-    chan.shutdown_write()
-    chan.recv_exit_status()
-    chan.close()
+    channel.shutdown_write()
+    time.sleep(1)
+    channel.recv(1024)
+    channel.close()
+    return sent
+
 
 def main():
     print("=" * 50)
@@ -66,13 +83,11 @@ def main():
     print("=" * 50)
     print()
 
-    # Get miner IP
     miner_ip = input("Enter miner IP address: ").strip()
     if not miner_ip:
         print("ERROR: No IP provided")
         sys.exit(1)
 
-    # Get flash code
     flash_code = input("Enter flash code: ").strip().upper()
     if not flash_code:
         print("ERROR: No flash code provided")
@@ -80,7 +95,7 @@ def main():
 
     # ── Step 1: Verify code ──
     print()
-    print("[1/5] Verifying flash code...")
+    print("[1/6] Verifying flash code...")
     try:
         resp = requests.get(
             f"{SERVER_URL}/tnaflasher/api/v1/flash/verify-code",
@@ -91,36 +106,30 @@ def main():
         if not result.get("valid"):
             print(f"ERROR: {result.get('error', 'Invalid code')}")
             sys.exit(1)
-        print(f"  Code valid: {result['device']} {result['version']}")
+        device = result["device"]
+        version = result["version"]
+        print(f"  Code valid: {device} {version}")
     except Exception as e:
         print(f"ERROR: Could not verify code: {e}")
         sys.exit(1)
 
-    # ── Step 2: Download firmware (streaming, never saved to disk) ──
-    print("[2/5] Downloading firmware...")
+    # ── Step 2: Get file list from server ──
+    print("[2/6] Getting firmware file list...")
+    file_url = f"{SERVER_URL}/tnaflasher/api/v1/flash/file"
     try:
         resp = requests.get(
-            f"{SERVER_URL}/tnaflasher/api/v1/flash/download",
+            f"{SERVER_URL}/tnaflasher/api/v1/flash/filelist",
             params={"code": flash_code},
-            stream=True,
-            timeout=120
+            timeout=30
         )
-        if resp.status_code != 200:
-            print(f"ERROR: Download failed (HTTP {resp.status_code})")
-            sys.exit(1)
-
-        # Read into memory — never touches disk
-        tar_data = io.BytesIO(resp.content)
-        tar = tarfile.open(fileobj=tar_data, mode='r:gz')
-        members = tar.getmembers()
-        total_size = sum(m.size for m in members if m.isfile())
-        print(f"  Downloaded {len(resp.content)} bytes, {len(members)} files ({total_size} bytes uncompressed)")
+        files = resp.json().get("files", [])
+        print(f"  {len(files)} files to install")
     except Exception as e:
-        print(f"ERROR: Download failed: {e}")
+        print(f"ERROR: Could not get file list: {e}")
         sys.exit(1)
 
     # ── Step 3: Connect to miner via SSH ──
-    print(f"[3/5] Connecting to miner at {miner_ip}...")
+    print(f"[3/6] Connecting to miner at {miner_ip}...")
     try:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -128,82 +137,62 @@ def main():
         print("  Connected")
     except Exception as e:
         print(f"ERROR: SSH connection failed: {e}")
-        print("  Make sure:")
-        print("  - Miner is powered on and on your network")
-        print("  - IP address is correct")
-        print("  - SSH is enabled (LuxOS or stock firmware)")
         sys.exit(1)
 
-    # ── Step 4: Flash firmware ──
-    print("[4/5] Installing TNA-OS...")
+    # ── Step 4: Prepare miner ──
+    print("[4/6] Preparing miner...")
+    ssh_exec(ssh, "killall -9 tna-miner bmminer cgminer single-board-test monitorcgminer luxminer httpd 2>/dev/null; sleep 2")
+    ssh_exec(ssh, "mount -o remount,rw /")
+    ssh_exec(ssh, "mount -t ubifs ubi0:nvdada_log /mnt/root 2>/dev/null")
+    ssh_exec(ssh, "rm -f /mnt/root/etc/rc5.d/S*luxminer* /mnt/root/etc/rc5.d/S*bmminer* "
+                  "/mnt/root/etc/rc5.d/S*single-board-test* /mnt/root/etc/rc5.d/S*monitorcgminer* 2>/dev/null")
+    print("  Done")
 
-    # Kill existing mining software
-    print("  Stopping mining software...")
-    ssh.exec_command('killall -9 tna-miner luxminer cgminer bmminer 2>/dev/null')
-    time.sleep(2)
+    # ── Step 5: Miner downloads each file from server via curl ──
+    print("[5/6] Installing TNA-OS (miner downloading from server)...")
 
-    # Mount filesystems writable
-    ssh.exec_command('mount -o remount,rw /')
-    ssh.exec_command('mount -t ubifs ubi0:nvdada_log /mnt/root 2>/dev/null')
-    time.sleep(1)
+    for f in files:
+        name = f.lstrip("./")
+        url = f"{file_url}?code={flash_code}&file={name}"
 
-    # Upload each file from tar
-    file_count = 0
-    for member in members:
-        if not member.isfile():
-            continue
+        if name == "tna-miner":
+            print(f"  Downloading binary...")
+            result = ssh_exec(ssh, f'curl -sf -o /tna-miner "{url}" && chmod +x /tna-miner && ls -lh /tna-miner', timeout=120)
+            print(f"    {result}")
 
-        f = tar.extractfile(member)
-        if f is None:
-            continue
-        data = f.read()
-        name = member.name
+        elif name == "tna-miner-init":
+            # Init script goes to NAND via dd (tiny file, safe)
+            print("  Installing init script on NAND...")
+            n = ssh_write_file(ssh, "/mnt/root/etc/init.d/tna-miner", TNA_INIT_SCRIPT)
+            ssh_exec(ssh, "chmod +x /mnt/root/etc/init.d/tna-miner")
+            ssh_exec(ssh, "ln -sf ../init.d/tna-miner /mnt/root/etc/rc5.d/S90tna-miner")
+            verify = ssh_exec(ssh, "head -1 /mnt/root/etc/init.d/tna-miner")
+            print(f"    Written {n} bytes — {'verified' if 'sh' in verify else 'WARNING: check failed'}")
 
-        # Strip leading ./ or path prefix
-        if name.startswith('./'):
-            name = name[2:]
-
-        if name == 'tna-miner':
-            print(f"  Uploading binary ({len(data)} bytes)...")
-            upload_via_dd(ssh, data, '/tna-miner')
-            ssh.exec_command('chmod +x /tna-miner')
-            file_count += 1
-
-        elif name == 'tna-miner-init':
-            print("  Installing init script...")
-            upload_via_dd(ssh, data, '/mnt/root/etc/init.d/tna-miner')
-            ssh.exec_command('chmod +x /mnt/root/etc/init.d/tna-miner')
-            ssh.exec_command('rm -f /mnt/root/etc/rc5.d/S*luxminer* /mnt/root/etc/rc5.d/S*bmminer* /mnt/root/etc/rc5.d/S*single-board-test* /mnt/root/etc/rc5.d/S*monitorcgminer* 2>/dev/null')
-            ssh.exec_command('ln -sf ../init.d/tna-miner /mnt/root/etc/rc5.d/S90tna-miner')
-            file_count += 1
-
-        elif name == 'tna-os.toml':
-            # Only install default config if none exists
-            stdin, stdout, stderr = ssh.exec_command('test -f /config/tna-os.toml && echo exists')
-            if 'exists' not in stdout.read().decode():
-                print("  Uploading default config...")
-                ssh.exec_command('mkdir -p /config')
-                upload_via_dd(ssh, data, '/config/tna-os.toml')
-                file_count += 1
+        elif name == "tna-os.toml":
+            exists = ssh_exec(ssh, "test -f /config/tna-os.toml && echo exists")
+            if "exists" in exists:
+                print("  Config exists — keeping current settings")
             else:
-                print("  Config exists, keeping current settings")
+                print("  Downloading default config...")
+                ssh_exec(ssh, "mkdir -p /config")
+                ssh_exec(ssh, f'curl -sf -o /config/tna-os.toml "{url}"', timeout=30)
 
-        elif name.startswith('firmware/'):
-            remote_path = '/' + name
-            upload_via_dd(ssh, data, remote_path)
-            file_count += 1
+        elif name.startswith("firmware/"):
+            remote = "/" + name
+            print(f"  {name}")
+            ssh_exec(ssh, f'mkdir -p $(dirname {remote})')
+            ssh_exec(ssh, f'curl -sf -o {remote} "{url}"', timeout=30)
 
-    print(f"  Uploaded {file_count} files")
+    # Cleanup old LuxOS artifacts
+    ssh_exec(ssh, "rm -f /luxminer /luxupdate /luxminer.disabled /luxupdate.disabled "
+                  "/mnt/root/etc/init.d/luxminer-init 2>/dev/null")
 
-    # Disable LuxOS if present
-    ssh.exec_command('test -f /luxminer && mv /luxminer /luxminer.disabled 2>/dev/null')
-
-    # ── Step 5: Sync NAND ──
-    print("[5/5] Syncing to NAND...")
-    ssh.exec_command('sync && sync && sync')
+    # ── Step 6: Sync NAND ──
+    print("[6/6] Syncing to NAND...")
+    ssh_exec(ssh, "sync && sync && sync")
     time.sleep(3)
-    ssh.exec_command('sync')
-    time.sleep(1)
+    ssh_exec(ssh, "sync")
 
     ssh.close()
 
@@ -213,6 +202,7 @@ def main():
     print(f"  Power cycle your miner, then open:")
     print(f"  http://{miner_ip}")
     print("=" * 50)
+
 
 if __name__ == '__main__':
     main()

@@ -363,8 +363,8 @@ async def create_flash_code_for_payment(
     )
 
 
-async def verify_flash_code(code: str) -> dict:
-    """Verify a flash code is valid and unused"""
+async def verify_flash_code(code: str, check_used: bool = True) -> dict:
+    """Verify a flash code is valid. If check_used=False, allow already-used codes (for file downloads)."""
     from .crud import get_flash_code_by_code
 
     flash_code = await get_flash_code_by_code(code)
@@ -372,7 +372,7 @@ async def verify_flash_code(code: str) -> dict:
     if not flash_code:
         return {"valid": False, "error": "Invalid code"}
 
-    if flash_code.status == "used":
+    if check_used and flash_code.status == "used":
         return {"valid": False, "error": "Code already used"}
 
     if flash_code.status == "expired":

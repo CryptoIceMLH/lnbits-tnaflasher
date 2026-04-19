@@ -282,6 +282,62 @@ async def api_download_firmware_by_code(
     )
 
 
+@tnaflasher_api_router.get("/flash/filelist")
+async def api_list_firmware_files(
+    code: str = Query(...),
+    request: Request = None
+):
+    """Return list of files in the firmware tar, authenticated by flash code."""
+    result = await verify_flash_code(code.upper(), check_used=False)
+    if not result.get("valid"):
+        raise HTTPException(status_code=403, detail="Invalid or expired flash code")
+
+    device = result["device"]
+    version = result["version"]
+    firmware_path = await get_firmware_path(device, version)
+    if not firmware_path:
+        raise HTTPException(status_code=404, detail="Firmware not found")
+
+    import tarfile
+    with tarfile.open(str(firmware_path), "r:gz") as tar:
+        files = [m.name for m in tar.getmembers() if m.isfile()]
+    return {"files": files}
+
+
+@tnaflasher_api_router.get("/flash/file")
+async def api_download_single_file(
+    code: str = Query(...),
+    file: str = Query(...),
+    request: Request = None
+):
+    """Serve a single file from the firmware tar by name, authenticated by flash code.
+    Called by curl on the miner — code must be valid (not necessarily unused)."""
+    result = await verify_flash_code(code.upper(), check_used=False)
+    if not result.get("valid"):
+        raise HTTPException(status_code=403, detail="Invalid or expired flash code")
+
+    device = result["device"]
+    version = result["version"]
+    firmware_path = await get_firmware_path(device, version)
+    if not firmware_path:
+        raise HTTPException(status_code=404, detail="Firmware not found")
+
+    import tarfile, io as _io
+    with tarfile.open(str(firmware_path), "r:gz") as tar:
+        # Normalize requested filename
+        target = file.lstrip("./")
+        for member in tar.getmembers():
+            name = member.name.lstrip("./")
+            if name == target:
+                f = tar.extractfile(member)
+                if f is None:
+                    raise HTTPException(status_code=404, detail=f"File {file} not extractable")
+                data = f.read()
+                from fastapi.responses import Response
+                return Response(content=data, media_type="application/octet-stream")
+    raise HTTPException(status_code=404, detail=f"File {file} not found in firmware")
+
+
 @tnaflasher_api_router.get("/tools/tna-flash.py")
 async def api_get_flash_tool(request: Request):
     """Download the TNA flash tool script with SERVER_URL injected from request host"""
