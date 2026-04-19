@@ -302,6 +302,18 @@ async def api_list_firmware_files(
     client_ip = request.client.host if request and request.client else "unknown"
     await mark_flash_code_used(code.upper(), client_ip)
 
+    # Audit log
+    miner = await get_miner(device)
+    miner_name = miner.name if miner else device
+    flash_code_obj = await get_flash_code_by_code(code.upper())
+    payment_ref = flash_code_obj.payment_hash[:16] if flash_code_obj else "unknown"
+    await create_audit_log(
+        wallet_id="public",
+        action="ssh_flash_started",
+        details=f"Device: {miner_name}, Version: {version}, Code: {code.upper()}, IP: {client_ip}, Ref: {payment_ref}...",
+        device_mac=None
+    )
+
     import tarfile
     with tarfile.open(str(firmware_path), "r:gz") as tar:
         files = [m.name for m in tar.getmembers() if m.isfile()]
