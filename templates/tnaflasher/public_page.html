@@ -559,12 +559,29 @@
 
             <!-- Flash code received -->
             <div v-if="flashCode">
+
               <!-- Code box -->
-              <div class="text-center q-mb-md">
+              <div class="text-center q-mb-sm">
                 <div class="text-caption text-tna-muted q-mb-xs">Your one-time flash code</div>
-                <div class="text-h3 text-weight-bold text-tna-accent" style="letter-spacing: 6px; font-family: monospace;">${ flashCode }</div>
-                <div class="text-caption text-tna-muted q-mt-xs">Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span></div>
-                <q-btn flat dense icon="content_copy" label="Copy Code" @click="copyFlashCode" color="orange" class="q-mt-sm" />
+                <div class="text-h3 text-weight-bold text-tna-accent q-mb-xs" style="letter-spacing: 6px; font-family: monospace;">${ flashCode }</div>
+                <div class="text-caption text-tna-muted q-mb-sm">Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span></div>
+              </div>
+              <div class="text-center q-mb-md">
+                <q-btn outline icon="content_copy" label="Copy Code" @click="copyFlashCode" color="orange" />
+              </div>
+
+              <q-separator class="q-my-md" />
+
+              <!-- Download -->
+              <div class="text-center q-mb-md">
+                <q-btn
+                  color="primary"
+                  icon="download"
+                  label="Download Flash Tool (tna-flash.py)"
+                  :href="flashToolUrl"
+                  target="_blank"
+                  size="md"
+                />
               </div>
 
               <q-separator class="q-my-md" />
@@ -572,7 +589,7 @@
               <!-- Instructions -->
               <div class="text-weight-bold text-tna-accent q-mb-sm">How to flash:</div>
               <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height: 2.2;">
-                <li>Download the flash tool below</li>
+                <li>Download the flash tool above</li>
                 <li>Open Command Prompt / PowerShell and run:<br>
                   <code style="background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 3px;">pip install paramiko requests</code>
                 </li>
@@ -582,18 +599,9 @@
               </ol>
 
               <div class="text-center q-mt-lg">
-                <q-btn
-                  color="primary"
-                  icon="download"
-                  label="Download Flash Tool (tna-flash.py)"
-                  :href="flashToolUrl"
-                  download="tna-flash.py"
-                  size="md"
-                  class="q-mb-md"
-                />
-                <br>
-                <q-btn flat dense label="Flash Another Device" @click="resetAll" class="text-tna-muted q-mt-sm" />
+                <q-btn flat dense label="Flash Another Device" @click="resetAll" class="text-tna-muted" />
               </div>
+
             </div>
 
             <!-- Not paid yet placeholder -->
