@@ -13,10 +13,10 @@
         }
       ],
       "repo": "https://github.com/CryptoIceMLH/lnbits-tnaflasher",
-      "version": "4.3.3",
+      "version": "4.4.0",
       "min_lnbits_version": "1.0.0",
-      "archive": "https://github.com/CryptoIceMLH/lnbits-tnaflasher/archive/refs/tags/v4.3.3.zip",
-      "hash": "3388f7f7ebd0bbf8aab46305c45696feca72d1490a4eeaab68afa9299c028582"
+      "archive": "https://github.com/CryptoIceMLH/lnbits-tnaflasher/archive/refs/tags/v4.4.0.zip",
+      "hash": "d508bccc2318e736af3998b8a03329324a13a956548b527624b7b542205064d7"
     }
   ]
 }
