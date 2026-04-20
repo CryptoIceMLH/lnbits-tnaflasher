@@ -186,3 +186,12 @@ async def m008_add_flash_codes_and_flash_method(db):
         )
         """
     )
+
+
+async def m009_promo_code_device_type(db):
+    """Add device_type column to promo_codes for webserial/ssh restrictions"""
+    await db.execute(
+        """
+        ALTER TABLE tnaflasher.promo_codes ADD COLUMN device_type TEXT NOT NULL DEFAULT 'both'
+        """
+    )

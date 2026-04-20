@@ -319,22 +319,23 @@ async def delete_bulletin(bulletin_id: str) -> bool:
 
 # ============== Promo Codes ==============
 
-async def create_promo_code(code: str, discount_percent: int, max_uses: int) -> PromoCode:
+async def create_promo_code(code: str, discount_percent: int, max_uses: int, device_type: str = "both") -> PromoCode:
     """Create a new promo code"""
     promo_id = str(uuid4())
     now = int(time.time())
 
     await db.execute(
         """
-        INSERT INTO tnaflasher.promo_codes (id, code, discount_percent, max_uses, used_count, active, created_at)
-        VALUES (:id, :code, :discount_percent, :max_uses, 0, TRUE, :created_at)
+        INSERT INTO tnaflasher.promo_codes (id, code, discount_percent, max_uses, used_count, active, created_at, device_type)
+        VALUES (:id, :code, :discount_percent, :max_uses, 0, TRUE, :created_at, :device_type)
         """,
         {
             "id": promo_id,
             "code": code.upper(),
             "discount_percent": discount_percent,
             "max_uses": max_uses,
-            "created_at": now
+            "created_at": now,
+            "device_type": device_type
         }
     )
 
@@ -345,7 +346,8 @@ async def create_promo_code(code: str, discount_percent: int, max_uses: int) -> 
         max_uses=max_uses,
         used_count=0,
         active=True,
-        created_at=now
+        created_at=now,
+        device_type=device_type
     )
 
 
@@ -372,9 +374,9 @@ async def get_promo_code_by_code(code: str) -> Optional[PromoCode]:
     return PromoCode(**row) if row else None
 
 
-async def validate_promo_code(code: str) -> tuple[bool, int, str]:
+async def validate_promo_code(code: str, device_type: str = "both") -> tuple[bool, int, str]:
     """
-    Validate a promo code.
+    Validate a promo code for a specific device type.
     Returns: (is_valid, discount_percent, message)
     """
     promo = await get_promo_code_by_code(code)
@@ -384,6 +386,9 @@ async def validate_promo_code(code: str) -> tuple[bool, int, str]:
 
     if not promo.active:
         return (False, 0, "Promo code is inactive")
+
+    if promo.device_type != "both" and promo.device_type != device_type:
+        return (False, 0, "Promo code not valid for this device type")
 
     if promo.used_count >= promo.max_uses:
         return (False, 0, "Promo code has reached its usage limit")

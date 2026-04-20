@@ -125,7 +125,7 @@ async def create_flash_invoice(
         if not firmware.discount_enabled:
             raise ValueError("Discounts are not available for this firmware")
 
-        is_valid, discount_percent, message = await validate_promo_code(promo_code)
+        is_valid, discount_percent, message = await validate_promo_code(promo_code, device_type=miner.flash_method)
         if not is_valid:
             raise ValueError(message)
         # Calculate discounted price

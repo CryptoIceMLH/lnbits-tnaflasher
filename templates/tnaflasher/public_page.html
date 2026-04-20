@@ -961,9 +961,10 @@
           this.validatingPromo = true
           this.promoError = ''
           try {
+            const flashMethod = this.selectedDeviceInfo?.flash_method || 'webserial'
             const response = await api.request(
               'POST',
-              `/tnaflasher/api/v1/validate-promo?code=${encodeURIComponent(this.promoCode)}`
+              `/tnaflasher/api/v1/validate-promo?code=${encodeURIComponent(this.promoCode)}&device_type=${flashMethod}`
             )
             if (response.data.valid) {
               this.promoApplied = true

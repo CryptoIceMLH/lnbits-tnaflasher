@@ -639,9 +639,9 @@ async def api_admin_delete_bulletin(
 # ============== Promo Code Endpoints ==============
 
 @tnaflasher_api_router.post("/validate-promo")
-async def api_validate_promo(code: str = Query(...)) -> ValidatePromoResponse:
-    """Validate a promo code (public endpoint)"""
-    is_valid, discount_percent, message = await validate_promo_code(code)
+async def api_validate_promo(code: str = Query(...), device_type: str = Query("both")) -> ValidatePromoResponse:
+    """Validate a promo code for a specific device type (public endpoint)"""
+    is_valid, discount_percent, message = await validate_promo_code(code, device_type=device_type)
     return ValidatePromoResponse(
         valid=is_valid,
         discount_percent=discount_percent,
@@ -667,7 +667,7 @@ async def api_admin_create_promo_code(
     if data.max_uses < 1:
         raise HTTPException(status_code=400, detail="Max uses must be at least 1")
 
-    promo = await create_promo_code(data.code, data.discount_percent, data.max_uses)
+    promo = await create_promo_code(data.code, data.discount_percent, data.max_uses, data.device_type)
     return promo.dict()
 
 

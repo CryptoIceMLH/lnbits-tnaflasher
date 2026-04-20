@@ -205,6 +205,17 @@
               :rules="[val => val >= 1 || 'Min 1']"
             />
           </div>
+          <div class="col-12 col-sm-3">
+            <q-select
+              v-model="newPromoDeviceType"
+              :options="[{label:'Both',value:'both'},{label:'USB Only',value:'webserial'},{label:'SSH Only',value:'ssh'}]"
+              label="Device Type"
+              outlined
+              dense
+              emit-value
+              map-options
+            />
+          </div>
           <div class="col-auto">
             <q-btn
               color="primary"
@@ -642,6 +653,7 @@
         newPromoCode: '',
         newPromoDiscount: 10,
         newPromoMaxUses: 1,
+        newPromoDeviceType: 'both',
         addingPromoCode: false,
         // Feature Toggles (pre-populated with defaults)
         featureFlags: {
@@ -1079,13 +1091,15 @@
             {
               code: this.newPromoCode,
               discount_percent: this.newPromoDiscount,
-              max_uses: this.newPromoMaxUses
+              max_uses: this.newPromoMaxUses,
+              device_type: this.newPromoDeviceType
             }
           )
           this.$q.notify({ type: 'positive', message: 'Promo code created!' })
           this.newPromoCode = ''
           this.newPromoDiscount = 10
           this.newPromoMaxUses = 1
+          this.newPromoDeviceType = 'both'
           await this.loadPromoCodes()
         } catch (e) {
           LNbits.utils.notifyApiError(e)

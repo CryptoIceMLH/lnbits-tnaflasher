@@ -100,6 +100,7 @@ class PromoCode(BaseModel):
     used_count: int = 0
     active: bool = True
     created_at: Optional[int] = None
+    device_type: str = "both"  # "webserial", "ssh", or "both"
 
 
 class CreatePromoCode(BaseModel):
@@ -107,6 +108,7 @@ class CreatePromoCode(BaseModel):
     code: str
     discount_percent: int
     max_uses: int
+    device_type: str = "both"
 
 
 class PromoCodesResponse(BaseModel):
