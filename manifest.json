@@ -1,22 +1,9 @@
 {
-  "featured": ["tnaflasher"],
-  "extensions": [
+  "repos": [
     {
       "id": "tnaflasher",
-      "name": "TNA Flasher",
-      "short_description": "Tech Nerd Army Web Flasher - Pay with Lightning to flash ESP & ASIC miners",
-      "icon": "https://raw.githubusercontent.com/CryptoIceMLH/lnbits-tnaflasher/main/static/images/tnaflasher.png",
-      "contributors": [
-        {
-          "name": "TechNerdArmy",
-          "github": "CryptoIceMLH"
-        }
-      ],
-      "repo": "https://github.com/CryptoIceMLH/lnbits-tnaflasher",
-      "version": "4.4.0",
-      "min_lnbits_version": "1.0.0",
-      "archive": "https://github.com/CryptoIceMLH/lnbits-tnaflasher/archive/refs/tags/v4.4.0.zip",
-      "hash": "d508bccc2318e736af3998b8a03329324a13a956548b527624b7b542205064d7"
+      "organisation": "CryptoIceMLH",
+      "repository": "lnbits-tnaflasher"
     }
   ]
 }
