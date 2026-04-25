@@ -1,77 +1,213 @@
 # TNA-Flash Compiled Executable — Webflasher Integration Brief
 
-This document is a briefing for the TNA-Webflasher agent. It describes the new compiled
-Go binary that replaces `tna-flash.py`, what the binary expects from the server, and
-exactly what the webflasher needs to add/change to support it.
+**Who this is for:** The TNA-Webflasher agent implementing the compiled binary support.
+Read this entire document before touching any code. Everything you need to know is here —
+you do not need to read the TNA-OS repo or any other project.
 
 ---
 
-## What Is Being Built
+## Background — What This Project Does
 
-A compiled Go binary (`tna-flash.exe` on Windows) that users download from the public
-flash page alongside their flash code. It is a true compiled native binary — no Python,
-no readable source, no bytecode extraction possible. This protects the SSH logic and
-exploit chain from being copied.
+TNA-Webflasher is a LNbits extension that lets users pay via Lightning Network to flash
+custom Bitcoin mining firmware (TNA-OS) onto Antminer S19 XP miners. The flow is:
 
-The binary is built from `static/tools/tna-flash-src/main.go` (source lives in this
-repo for reference, but only the compiled `.exe` is served publicly).
+1. User visits the public flash page, selects their miner, pays a Lightning invoice
+2. Server confirms payment and issues a one-time flash code: `TNA-XXXX-XXXX`
+3. User runs a flash tool on their Windows PC with the miner's IP + flash code
+4. Flash tool SSHes to the miner; miner downloads firmware files directly from the server
+5. Miner reboots into TNA-OS firmware
 
----
-
-## How the New Binary Works (from the user's perspective)
-
-```
-1. User pays Lightning invoice on the public flash page
-2. Flash code is shown: TNA-XXXX-XXXX
-3. A "Download Flash Tool" button appears (new — webflasher must add this)
-4. User downloads tna-flash.exe, runs it
-5. Exe prompts: "Enter miner IP:" and "Enter flash code:"
-6. Exe calls your server to verify the code and get the file list
-7. Exe SSHs to the miner
-8. Miner curls each firmware file directly from your server (same as today)
-9. Exe syncs NAND, tells user to power cycle
-```
-
-The server-side file delivery (tar.gz → per-file extraction via `/flash/file`) is
-**unchanged**. The binary just replaces the Python script the user was running.
+The miner connects to the server via curl over HTTPS — the user's PC is just the SSH
+relay that orchestrates the process.
 
 ---
 
-## Server API the Binary Uses (no changes needed to existing endpoints)
+## What Is Changing and Why
 
-The Go binary calls the same endpoints `tna-flash.py` already calls:
+### Current state (what exists today)
 
-| Endpoint | Used for |
-|----------|----------|
-| `GET /tnaflasher/api/v1/flash/verify-code?code=TNA-XXXX-XXXX` | Validate code, get device+version |
-| `GET /tnaflasher/api/v1/flash/filelist?code=TNA-XXXX-XXXX` | Get list of files in firmware package |
-| `GET /tnaflasher/api/v1/flash/file?code=TNA-XXXX-XXXX&file=tna-miner` | Per-file download URL (miner curls this directly) |
-
-**These endpoints already exist and work correctly. No changes needed.**
-
-The binary constructs the per-file URL as:
+`static/tools/tna-flash.py` — a Python script served publicly at:
 ```
-https://lnbits.molonlabe.holdings/tnaflasher/api/v1/flash/file?code={code}&file={filename}
+GET /tnaflasher/api/v1/tools/tna-flash.py
 ```
-and passes this URL to the miner via SSH so the miner curls it directly.
+
+**Problem:** This is plain readable Python source. Anyone who downloads it can read the
+full SSH logic, understand how we gain root access on the miner, and copy our exploit
+chain. It also has a hardcoded broken init script (`TNA_INIT_SCRIPT` bytes literal at
+line 36) that was never updated when the init script was fixed server-side — meaning the
+server's correct init script was being silently ignored and the old broken one was
+written to the miner instead.
+
+### New state (what you are building)
+
+`static/tools/tna-flash.exe` — a compiled Go binary served at:
+```
+GET /tnaflasher/api/v1/tools/tna-flash.exe
+```
+
+The Go binary is a true compiled native executable — no Python runtime, no bytecode,
+no readable source. The source lives at `static/tools/tna-flash-src/main.go` (already
+written, see below) but only the compiled `.exe` is served publicly.
+
+The old Python source endpoint is removed so it's no longer publicly accessible.
 
 ---
 
-## What the Webflasher Agent Needs to Add
+## How the Firmware Delivery Works (DO NOT CHANGE THIS)
 
-### 1. New endpoint: serve the compiled binary
+The server stores firmware as a `.tar.gz` uploaded via the admin panel. When a user's
+flash tool calls the file endpoints, the server extracts individual files from that
+tarball on the fly and streams them.
+
+The tarball has this exact flat layout (no wrapping directory):
+```
+tna-miner          ← ARM32 mining daemon binary (~5MB)
+tna-miner-init     ← sysvinit init script for /etc/init.d/
+tna-os.toml        ← default miner config
+firmware/          ← Angular web UI bundle
+firmware/index.html
+firmware/main.*.js
+firmware/runtime.*.js
+firmware/polyfills.*.js
+firmware/styles.*.css
+firmware/assets/
+firmware/assets/helmet.png
+firmware/assets/i18n/en.json
+... (etc)
+```
+
+**The tarball layout is correct and does not need changing.** The Go binary uses the
+same three API endpoints the old Python script used — nothing changes server-side for
+file delivery.
+
+---
+
+## API Endpoints the Go Binary Calls (already exist, no changes needed)
+
+### 1. Verify flash code
+```
+GET /tnaflasher/api/v1/flash/verify-code?code=TNA-XXXX-XXXX
+```
+Response:
+```json
+{"valid": true, "device": "s19xp_v1", "version": "v0.3.1"}
+```
+or on failure:
+```json
+{"valid": false, "error": "invalid or expired code"}
+```
+
+### 2. Get file list
+```
+GET /tnaflasher/api/v1/flash/filelist?code=TNA-XXXX-XXXX
+```
+Response:
+```json
+{"files": ["tna-miner", "tna-miner-init", "tna-os.toml", "firmware/index.html", ...]}
+```
+Note: calling this endpoint marks the code as used (one-time). This is existing behaviour.
+
+### 3. Download individual file (the miner curls this URL directly)
+```
+GET /tnaflasher/api/v1/flash/file?code=TNA-XXXX-XXXX&file=tna-miner
+GET /tnaflasher/api/v1/flash/file?code=TNA-XXXX-XXXX&file=firmware/index.html
+```
+Returns raw binary/text file contents. The Go binary constructs this URL and passes it
+to the miner via SSH so the miner curls it directly — the user's PC does not download
+the firmware bytes.
+
+**None of these endpoints need any changes.**
+
+---
+
+## What the Go Binary Does on the Miner (SSH sequence)
+
+This is the exact sequence the compiled binary executes over SSH. Documented here so
+you understand what the binary is doing — you don't implement this, it's inside the
+compiled binary already.
+
+SSH credentials: `root:root` on port `22`. The miner runs Dropbear SSH (no SFTP
+subsystem — but the binary doesn't use SFTP, only exec channels).
+
+```bash
+# Step 1: Kill any running miners to free resources
+killall -9 tna-miner bmminer cgminer single-board-test monitorcgminer luxminer httpd 2>/dev/null
+sleep 1
+
+# Step 2: For each file in the list from the server:
+
+# tna-miner (the main binary, ~5MB):
+curl -sf -o /tna-miner "https://server/api/v1/flash/file?code=XXX&file=tna-miner"
+chmod +x /tna-miner
+
+# tna-miner-init (the init script — fetched from server, NOT hardcoded):
+curl -sf -o /tmp/tna-miner-init "https://server/api/v1/flash/file?code=XXX&file=tna-miner-init"
+cp /tmp/tna-miner-init /etc/init.d/tna-miner
+chmod +x /etc/init.d/tna-miner
+ln -sf ../init.d/tna-miner /etc/rc5.d/S90tna-miner
+
+# tna-os.toml (default config — only written if not already present):
+test -f /config/tna-os.toml || curl -sf -o /config/tna-os.toml "https://server/.../tna-os.toml"
+
+# firmware/* (Angular web UI files — miner writes to /firmware/):
+mkdir -p /firmware/assets/i18n
+curl -sf -o /firmware/index.html "https://server/.../firmware/index.html"
+curl -sf -o /firmware/main.*.js "..."
+# ... (all firmware/* files from the list)
+
+# Step 3: Clean up old LuxOS artifacts (previous firmware brand)
+rm -f /luxminer /luxupdate /luxminer.disabled /mnt/root/etc/init.d/luxminer-init 2>/dev/null
+
+# Step 4: Sync filesystem to NAND (critical — power cut before this = data loss)
+sync && sync && sync
+sleep 3
+sync
+```
+
+**Key fix vs the old Python script:** The old `tna-flash.py` had `TNA_INIT_SCRIPT`
+hardcoded as a bytes literal and wrote that to the miner instead of the server's copy.
+This meant init script fixes on the server were never picked up. The Go binary
+correctly curls `tna-miner-init` from the server so whatever is in the tarball is
+what gets installed.
+
+---
+
+## The Go Source (already written — at static/tools/tna-flash-src/main.go)
+
+The Go source is already committed to this repo at:
+```
+static/tools/tna-flash-src/main.go
+static/tools/tna-flash-src/go.mod
+```
+
+You do not need to write the Go code. The compiled binary (`static/tools/tna-flash.exe`)
+is produced by running this on a Windows machine (or cross-compiling):
+```bash
+cd static/tools/tna-flash-src
+go mod tidy
+GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ../tna-flash.exe .
+```
+
+The TNA-OS project owner will provide the compiled `tna-flash.exe` — you just need to
+serve it once it exists at `static/tools/tna-flash.exe`.
+
+---
+
+## Your 3 Tasks
+
+### Task 1 — Add endpoint to serve the compiled binary
 
 **File: `views_api.py`**
 
-Add this endpoint. The binary is stored at `static/tools/tna-flash.exe`:
+Add this new endpoint. It serves the compiled Windows binary for download:
 
 ```python
 @tnaflasher_api_router.get("/tools/tna-flash.exe")
 async def api_download_flash_tool():
-    """Serve the compiled tna-flash Windows executable."""
+    """Serve compiled tna-flash Windows executable."""
     path = Path(__file__).parent / "static" / "tools" / "tna-flash.exe"
     if not path.exists():
-        raise HTTPException(status_code=404, detail="Flash tool binary not available yet")
+        raise HTTPException(status_code=404, detail="Flash tool binary not yet available")
     return FileResponse(
         path,
         filename="tna-flash.exe",
@@ -79,21 +215,38 @@ async def api_download_flash_tool():
     )
 ```
 
-Also **remove or admin-gate** the old Python source endpoint — search `views_api.py`
-for any route that serves `tna-flash.py` and either delete it or wrap it in
-`@Depends(check_admin)` so the source is no longer publicly downloadable.
+`Path` is already imported at the top of `views_api.py`. `FileResponse` is already
+imported too. This is a drop-in addition — no other files need changing for this task.
 
----
+### Task 2 — Remove or gate the old Python source endpoint
 
-### 2. Download button on the public flash page
+**File: `views_api.py`**
+
+Search for any route that serves `tna-flash.py` (there may be one, or it may be served
+as a static file directly). If it exists as an explicit route, either:
+- Delete it entirely (preferred), or
+- Wrap it with `@Depends(check_admin)` so it's no longer publicly accessible
+
+The file `static/tools/tna-flash.py` itself can stay on disk for reference — just
+don't serve it publicly.
+
+### Task 3 — Add download button to the public flash page
 
 **File: `templates/tnaflasher/public_page.html`**
 
-Find the section where the flash code is displayed for SSH devices (search for
-`flash_code` in the Vue template). Directly below that code display block, add:
+This is a Vue 3 + Quasar UI app. Find the section in the Vue template where the flash
+code is displayed after a successful payment for SSH devices. It will look something
+like:
+```html
+<div v-if="flashResult.flash_code">
+  <!-- flash code display -->
+</div>
+```
+or check for `flash_method === 'ssh'` or `flashResult.flash_code`.
+
+Directly after that block (still inside the same payment-confirmed section), add:
 
 ```html
-<!-- tna-flash.exe download — shown only for SSH/ASIC devices after payment -->
 <div v-if="flashResult && flashResult.flash_method === 'ssh'" class="q-mt-md">
   <div class="text-subtitle2 q-mb-xs">Step 2: Download Flash Tool</div>
   <q-btn
@@ -103,81 +256,45 @@ Find the section where the flash code is displayed for SSH devices (search for
     color="orange"
     unelevated
     no-caps
+    type="a"
   />
   <div class="text-caption text-grey q-mt-xs">
-    No install required. Run it, enter your miner IP and the code above.
+    No Python install required. Run it, enter your miner IP and the code above.
   </div>
 </div>
 ```
 
-The button only appears for SSH-method devices (ASIC miners). WebSerial devices
-(ESP32) are unaffected — they flash via browser as before.
+This button only appears for SSH/ASIC miners (Antminer S19 XP). WebSerial devices
+(ESP32 Nerd miners) are completely unaffected — they flash via browser WebSerial as
+before and don't use this tool at all.
 
 ---
 
-### 3. Place the compiled binary in the repo
+## Files Changed Summary
 
-**Path: `static/tools/tna-flash.exe`**
+| File | What to do |
+|------|-----------|
+| `views_api.py` | Add `GET /tools/tna-flash.exe` endpoint (Task 1) |
+| `views_api.py` | Remove/gate old `GET /tools/tna-flash.py` endpoint (Task 2) |
+| `templates/tnaflasher/public_page.html` | Add download button after SSH flash code (Task 3) |
+| `static/tools/tna-flash.exe` | Place here when binary is provided — just serve it |
+| `static/tools/tna-flash.py` | Keep on disk, stop serving it publicly |
 
-The TNA-OS project (separate repo) builds this binary and commits it here. The
-webflasher just needs to serve whatever file exists at that path. If the file is
-not there yet, the endpoint returns 404 gracefully (handled above).
-
-The Go source lives at `static/tools/tna-flash-src/main.go` for reference but is
-NOT served publicly — only the compiled `.exe` is.
-
----
-
-## What the Binary Does on the Miner (SSH sequence)
-
-This is what the Go binary sends to the miner over SSH, in order. The webflasher
-agent does not need to implement this — it's inside the binary — but it's here for
-reference so the server can verify expected behaviour:
-
-```bash
-# Kill any running miners
-killall -9 tna-miner bmminer cgminer single-board-test monitorcgminer luxminer httpd 2>/dev/null
-
-# For tna-miner binary:
-curl -sf -o /tna-miner "{file_url}?code={code}&file=tna-miner"
-chmod +x /tna-miner
-
-# For tna-miner-init (init script):
-curl -sf -o /tmp/tna-miner-init "{file_url}?code={code}&file=tna-miner-init"
-cp /tmp/tna-miner-init /etc/init.d/tna-miner
-chmod +x /etc/init.d/tna-miner
-ln -sf ../init.d/tna-miner /etc/rc5.d/S90tna-miner
-
-# For tna-os.toml (only if not already present):
-test -f /config/tna-os.toml || curl -sf -o /config/tna-os.toml "{file_url}?code={code}&file=tna-os.toml"
-
-# For firmware/* files:
-mkdir -p /firmware/assets/i18n
-curl -sf -o /firmware/{filename} "{file_url}?code={code}&file=firmware/{filename}"
-
-# Cleanup old LuxOS artifacts
-rm -f /luxminer /luxupdate /mnt/root/etc/init.d/luxminer-init 2>/dev/null
-
-# NAND sync
-sync && sync && sync
-sleep 3
-sync
-```
-
-The miner downloads everything directly from `lnbits.molonlabe.holdings` — the user's
-machine is just the SSH relay, no firmware bytes pass through it.
+**No other files need changing.** No database migrations. No changes to `services.py`,
+`crud.py`, `tasks.py`, `models.py`, or any other backend file. The entire server-side
+flash code + file delivery system is unchanged.
 
 ---
 
-## Summary of Changes for Webflasher Agent
+## Verification Checklist
 
-| File | Change |
-|------|--------|
-| `views_api.py` | Add `GET /tools/tna-flash.exe` endpoint (FileResponse) |
-| `views_api.py` | Remove or admin-gate old `GET /tools/tna-flash.py` endpoint |
-| `templates/tnaflasher/public_page.html` | Add download button after SSH flash code display |
-| `static/tools/tna-flash.exe` | Place compiled binary here (provided by TNA-OS project) |
-| `static/tools/tna-flash-src/main.go` | Place Go source here (for reference, not served) |
+After implementing all 3 tasks:
 
-No database migrations needed. No changes to services.py, crud.py, tasks.py, or models.py.
-The existing flash code verification and file delivery API is unchanged.
+1. `GET /tnaflasher/api/v1/tools/tna-flash.py` → should return 404 or require admin auth
+2. `GET /tnaflasher/api/v1/tools/tna-flash.exe` → returns 404 if binary not yet placed
+   (graceful), returns the `.exe` file once binary is in `static/tools/`
+3. Public flash page: pay for a WebSerial device → download button does NOT appear
+4. Public flash page: pay for an SSH/ASIC device → download button DOES appear below
+   the flash code
+5. Clicking the download button → browser downloads `tna-flash.exe`
+6. Running `tna-flash.exe` with a valid code and miner IP → flashes successfully
