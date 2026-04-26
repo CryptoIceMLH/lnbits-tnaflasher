@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tech Nerd Army Web Flasher</title>
   <link href="https://cdn.jsdelivr.net/npm/quasar@2.14.0/dist/quasar.prod.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
     :root {
       --bg-primary: #0a0a0a;
@@ -566,7 +567,7 @@
                   ${ flashCode }
                 </div>
                 <div class="q-mt-xs">
-                  <q-btn flat dense size="sm" label="Copy Code" @click="copyFlashCode" class="text-tna-accent" />
+                  <q-btn flat dense size="sm" icon="content_copy" label="Copy Code" @click="copyFlashCode" class="text-tna-accent" />
                 </div>
                 <div class="text-caption text-tna-muted q-mt-xs">
                   Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span>
@@ -579,7 +580,7 @@
                 <ol style="margin: 0; padding-left: 1.4em; color: var(--text-secondary); line-height: 1.8; font-size: 0.9rem;">
                   <li>Download <strong style="color: var(--accent);">TNA-OS Flasher.exe</strong> below</li>
                   <li>Run it — enter your miner's IP and the code above</li>
-                  <li>Wait for completion, then <strong style="color: var(--accent);">power cycle</strong> your miner</li>
+                  <li>Wait for completion — miner will <strong style="color: var(--accent);">reboot automatically</strong> into TNA-OS</li>
                 </ol>
               </div>
 
