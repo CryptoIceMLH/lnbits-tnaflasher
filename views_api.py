@@ -221,7 +221,7 @@ async def api_verify_flash_code(
     """Verify a flash code (called by tna-flash.py tool)"""
     # Rate limiting
     client_ip = request.client.host if request and request.client else "unknown"
-    within_limit = await check_rate_limit(client_ip, "verify-code", max_attempts=5, window_seconds=3600)
+    within_limit = await check_rate_limit(client_ip, "verify-code", max_attempts=60, window_seconds=3600)
     if not within_limit:
         raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
     await record_rate_limit_attempt(client_ip, "verify-code")
@@ -385,7 +385,14 @@ async def api_admin_upload_flasher(
     path.parent.mkdir(parents=True, exist_ok=True)
     contents = await file.read()
     path.write_bytes(contents)
-    return {"ok": True, "size": len(contents), "filename": "TNA-OS Flasher.exe"}
+    size_mb = round(len(contents) / 1024 / 1024, 2)
+    await create_audit_log(
+        wallet_id=user.id,
+        action="flasher_updated",
+        details=f"TNA-OS Flasher.exe replaced: {size_mb} MB ({len(contents)} bytes)",
+        device_mac=None
+    )
+    return {"ok": True, "size": len(contents), "size_mb": size_mb, "filename": "TNA-OS Flasher.exe"}
 
 
 @tnaflasher_api_router.get("/tools/TNA-OS Flasher.exe")

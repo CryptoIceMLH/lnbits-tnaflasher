@@ -565,11 +565,11 @@
                 <div class="text-h3 text-weight-bold text-tna-accent q-mb-xs" style="letter-spacing: 4px; font-family: monospace;">
                   ${ flashCode }
                 </div>
-                <div class="row justify-center items-center q-gutter-sm">
-                  <q-btn flat dense size="sm" icon="content_copy" label="Copy" @click="copyFlashCode" class="text-tna-accent" />
-                  <span class="text-caption text-tna-muted">
-                    Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span>
-                  </span>
+                <div class="q-mt-xs">
+                  <q-btn flat dense size="sm" icon="content_copy" label="Copy Code" @click="copyFlashCode" class="text-tna-accent" />
+                </div>
+                <div class="text-caption text-tna-muted q-mt-xs">
+                  Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span>
                 </div>
               </div>
 
@@ -585,17 +585,14 @@
 
               <!-- Download button -->
               <div class="text-center q-mb-md">
-                <q-btn
-                  color="orange"
-                  icon="download"
-                  label="Download TNA-OS Flasher.exe"
+                <a
                   :href="flashExeUrl"
                   target="_blank"
-                  unelevated
-                  no-caps
-                  style="font-size: 0.95rem; padding: 8px 20px;"
-                />
-                <div class="text-caption text-tna-muted q-mt-xs">Windows — no Python required</div>
+                  style="display:inline-block; background: #f7931a; color: #000; font-weight: 600; font-size: 0.95rem; padding: 10px 24px; border-radius: 6px; text-decoration: none; letter-spacing: 0.3px;"
+                >
+                  &#11015;&#xFE0F; Download TNA-OS Flasher.exe
+                </a>
+                <div class="text-caption text-tna-muted q-mt-sm">Windows executable — no Python required</div>
               </div>
 
               <div class="text-center">

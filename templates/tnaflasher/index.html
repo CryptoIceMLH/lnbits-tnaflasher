@@ -1337,7 +1337,7 @@
         try {
           const formData = new FormData()
           formData.append('file', this.flasherExeFile)
-          await fetch(
+          const resp = await fetch(
             '/tnaflasher/api/v1/admin/tools/upload-flasher',
             {
               method: 'POST',
@@ -1345,7 +1345,12 @@
               body: formData
             }
           )
-          this.$q.notify({ type: 'positive', message: 'Flasher binary updated successfully!' })
+          if (!resp.ok) throw new Error(`Server error ${resp.status}`)
+          const result = await resp.json()
+          this.$q.notify({
+            type: 'positive',
+            message: `TNA-OS Flasher.exe updated — ${result.size_mb} MB uploaded successfully`
+          })
           this.flasherExeFile = null
         } catch (e) {
           this.$q.notify({ type: 'negative', message: 'Upload failed: ' + e })
