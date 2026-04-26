@@ -195,3 +195,12 @@ async def m009_promo_code_device_type(db):
         ALTER TABLE tnaflasher.promo_codes ADD COLUMN device_type TEXT NOT NULL DEFAULT 'both'
         """
     )
+
+
+async def m010_firmware_file_size(db):
+    """Add file_size_bytes column to firmware table"""
+    await db.execute(
+        """
+        ALTER TABLE tnaflasher.firmware ADD COLUMN file_size_bytes INTEGER NOT NULL DEFAULT 0
+        """
+    )

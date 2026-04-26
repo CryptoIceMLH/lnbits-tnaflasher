@@ -373,6 +373,21 @@ async def api_admin_get_flash_codes(
     return {"flash_codes": result}
 
 
+@tnaflasher_api_router.post("/admin/tools/upload-flasher")
+async def api_admin_upload_flasher(
+    file: UploadFile = File(...),
+    user: User = Depends(check_admin)
+):
+    """Upload a new TNA-OS Flasher.exe to replace the current one (admin only)."""
+    if not file.filename.lower().endswith(".exe"):
+        raise HTTPException(status_code=400, detail="File must be a .exe")
+    path = Path(__file__).parent / "static" / "tools" / "TNA-OS Flasher.exe"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    contents = await file.read()
+    path.write_bytes(contents)
+    return {"ok": True, "size": len(contents), "filename": "TNA-OS Flasher.exe"}
+
+
 @tnaflasher_api_router.get("/tools/TNA-OS Flasher.exe")
 async def api_download_flash_exe():
     """Serve compiled TNA-OS Flasher Windows executable."""
@@ -560,7 +575,8 @@ async def api_admin_upload_firmware(
         price_sats=price_sats,
         file_path=f"{miner_id}/{version}{file_ext}",
         notes=notes,
-        discount_enabled=discount_enabled
+        discount_enabled=discount_enabled,
+        file_size_bytes=len(content)
     )
 
     return {

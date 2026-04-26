@@ -558,40 +558,48 @@
             </div>
 
             <!-- Flash code received -->
-            <div v-if="flashCode" class="text-center">
-              <div class="text-subtitle1 text-tna-secondary q-mb-md">Your Flash Code:</div>
-              <div class="text-h3 text-weight-bold text-tna-accent q-mb-sm" style="letter-spacing: 4px; font-family: monospace;">
-                ${ flashCode }
+            <div v-if="flashCode">
+              <!-- Flash code display -->
+              <div class="text-center q-mb-md">
+                <div class="text-subtitle2 text-tna-secondary q-mb-xs">Your One-Time Flash Code</div>
+                <div class="text-h3 text-weight-bold text-tna-accent q-mb-xs" style="letter-spacing: 4px; font-family: monospace;">
+                  ${ flashCode }
+                </div>
+                <div class="row justify-center items-center q-gutter-sm">
+                  <q-btn flat dense size="sm" icon="content_copy" label="Copy" @click="copyFlashCode" class="text-tna-accent" />
+                  <span class="text-caption text-tna-muted">
+                    Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span>
+                  </span>
+                </div>
               </div>
-              <q-btn flat dense label="Copy Code" @click="copyFlashCode" class="text-tna-accent q-mb-md" />
 
-              <div class="text-caption text-tna-muted q-mb-lg">
-                Expires in: <span class="text-tna-accent text-weight-bold">${ flashCodeCountdown }</span>
-              </div>
-
-              <div class="q-pa-md q-mb-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px; text-align: left;">
-                <div class="text-weight-bold text-tna-accent q-mb-sm">Instructions:</div>
-                <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height: 2;">
-                  <li>Download <strong class="text-tna-accent">TNA-OS Flasher.exe</strong> below (Windows, no Python needed)</li>
-                  <li>Run it and enter your miner's IP address and the flash code above</li>
-                  <li>Wait for the flash to complete, then <strong class="text-tna-accent">power cycle</strong> your miner</li>
+              <!-- Instructions box -->
+              <div class="q-pa-md q-mb-md" style="background: rgba(247,147,26,0.08); border: 1px solid rgba(247,147,26,0.4); border-radius: 8px;">
+                <div class="text-subtitle2 text-tna-accent q-mb-sm">How to flash:</div>
+                <ol style="margin: 0; padding-left: 1.4em; color: var(--text-secondary); line-height: 1.8; font-size: 0.9rem;">
+                  <li>Download <strong style="color: var(--accent);">TNA-OS Flasher.exe</strong> below</li>
+                  <li>Run it — enter your miner's IP and the code above</li>
+                  <li>Wait for completion, then <strong style="color: var(--accent);">power cycle</strong> your miner</li>
                 </ol>
               </div>
 
-              <q-btn
-                color="orange"
-                icon="download"
-                label="Download TNA-OS Flasher.exe"
-                :href="flashExeUrl"
-                target="_blank"
-                size="lg"
-                unelevated
-                no-caps
-              />
-              <div class="text-caption text-tna-muted q-mt-xs">Windows executable — no Python install required</div>
+              <!-- Download button -->
+              <div class="text-center q-mb-md">
+                <q-btn
+                  color="orange"
+                  icon="download"
+                  label="Download TNA-OS Flasher.exe"
+                  :href="flashExeUrl"
+                  target="_blank"
+                  unelevated
+                  no-caps
+                  style="font-size: 0.95rem; padding: 8px 20px;"
+                />
+                <div class="text-caption text-tna-muted q-mt-xs">Windows — no Python required</div>
+              </div>
 
-              <div class="q-mt-lg">
-                <q-btn flat label="Flash Another Device" @click="resetAll" class="text-tna-accent" />
+              <div class="text-center">
+                <q-btn flat size="sm" label="Flash Another Device" @click="resetAll" class="text-tna-accent" />
               </div>
             </div>
 

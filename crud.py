@@ -524,7 +524,8 @@ async def create_firmware(
     price_sats: int,
     file_path: str,
     notes: Optional[str] = None,
-    discount_enabled: bool = True
+    discount_enabled: bool = True,
+    file_size_bytes: int = 0
 ) -> Firmware:
     """Create a new firmware entry"""
     firmware_id = str(uuid4())
@@ -532,8 +533,8 @@ async def create_firmware(
 
     await db.execute(
         """
-        INSERT INTO tnaflasher.firmware (id, miner_id, version, price_sats, notes, discount_enabled, file_path, created_at)
-        VALUES (:id, :miner_id, :version, :price_sats, :notes, :discount_enabled, :file_path, :created_at)
+        INSERT INTO tnaflasher.firmware (id, miner_id, version, price_sats, notes, discount_enabled, file_path, file_size_bytes, created_at)
+        VALUES (:id, :miner_id, :version, :price_sats, :notes, :discount_enabled, :file_path, :file_size_bytes, :created_at)
         """,
         {
             "id": firmware_id,
@@ -543,6 +544,7 @@ async def create_firmware(
             "notes": notes,
             "discount_enabled": discount_enabled,
             "file_path": file_path,
+            "file_size_bytes": file_size_bytes,
             "created_at": now
         }
     )
@@ -555,6 +557,7 @@ async def create_firmware(
         notes=notes,
         discount_enabled=discount_enabled,
         file_path=file_path,
+        file_size_bytes=file_size_bytes,
         created_at=now
     )
 

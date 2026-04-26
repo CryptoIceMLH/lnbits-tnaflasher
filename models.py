@@ -153,6 +153,7 @@ class Firmware(BaseModel):
     notes: Optional[str] = None
     discount_enabled: bool = True
     file_path: str
+    file_size_bytes: int = 0
     created_at: Optional[int] = None
 
 

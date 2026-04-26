@@ -390,6 +390,10 @@
                           <q-badge v-if="fw.discount_enabled" color="positive" class="q-ml-xs">Discount OK</q-badge>
                           <q-badge v-else color="grey" class="q-ml-xs">No Discount</q-badge>
                         </q-item-label>
+                        <q-item-label caption>
+                          <span class="text-grey-6">${ fw.file_path.split('/').pop() }</span>
+                          <span v-if="fw.file_size_bytes > 0" class="text-grey-5 q-ml-sm">${ formatFileSize(fw.file_size_bytes) }</span>
+                        </q-item-label>
                         <q-item-label caption v-if="fw.notes">${ fw.notes }</q-item-label>
                       </q-item-section>
                       <q-item-section side>
@@ -457,6 +461,9 @@
                         <q-icon name="attach_file" />
                       </template>
                     </q-file>
+                    <div v-if="uploadData[miner.id].file" class="text-caption text-grey-6 q-mt-xs q-pl-xs">
+                      ${ uploadData[miner.id].file.name } &mdash; ${ formatFileSize(uploadData[miner.id].file.size) }
+                    </div>
                   </div>
                   <div class="col-auto">
                     <q-btn
@@ -513,6 +520,42 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <!-- Flasher Exe Upload -->
+  <div class="col-12">
+    <q-card>
+      <q-card-section>
+        <div class="text-h6 q-mb-xs">Flash Tool Binary (TNA-OS Flasher.exe)</div>
+        <div class="text-caption text-grey q-mb-md">Replace the compiled flasher that users download after paying for SSH flashing.</div>
+        <div class="row q-col-gutter-sm items-end">
+          <div class="col-12 col-sm-6">
+            <q-file
+              v-model="flasherExeFile"
+              label="Select TNA-OS Flasher.exe"
+              accept=".exe"
+              outlined dense
+            >
+              <template v-slot:prepend><q-icon name="attach_file" /></template>
+            </q-file>
+            <div v-if="flasherExeFile" class="text-caption text-grey-6 q-mt-xs q-pl-xs">
+              ${ flasherExeFile.name } &mdash; ${ formatFileSize(flasherExeFile.size) }
+            </div>
+          </div>
+          <div class="col-auto">
+            <q-btn
+              color="orange"
+              icon="upload"
+              label="Upload Flasher"
+              unelevated
+              :disable="!flasherExeFile"
+              :loading="uploadingFlasher"
+              @click="uploadFlasherExe"
+            />
           </div>
         </div>
       </q-card-section>
@@ -579,28 +622,33 @@
   <div class="col-12">
     <q-card>
       <q-card-section>
-        <div class="row items-center q-mb-md">
+        <div class="row items-center q-mb-sm">
           <div class="text-h6">Activity Log</div>
           <q-space></q-space>
-          <q-select
-            v-model="activityActionFilter"
-            :options="activityActionOptions"
-            dense outlined label="Filter" style="width:160px"
-            class="q-mr-sm" clearable emit-value map-options
-          />
-          <q-input v-model="activitySearch" dense outlined placeholder="Search..."
-                   style="width:220px" class="q-mr-sm" clearable>
-            <template v-slot:prepend><q-icon name="search" /></template>
-          </q-input>
-          <q-btn flat icon="refresh" @click="loadActivityLog" :loading="loadingActivity">
+          <q-btn flat dense icon="refresh" @click="loadActivityLog" :loading="loadingActivity">
             <q-tooltip>Refresh</q-tooltip>
           </q-btn>
-          <q-btn flat icon="download" @click="downloadActivityLog" color="primary">
+          <q-btn flat dense icon="download" @click="downloadActivityLog" color="primary">
             <q-tooltip>Download CSV</q-tooltip>
           </q-btn>
-          <q-btn flat icon="delete_sweep" @click="confirmClearLog" color="negative">
+          <q-btn flat dense icon="delete_sweep" @click="confirmClearLog" color="negative">
             <q-tooltip>Clear Log</q-tooltip>
           </q-btn>
+        </div>
+        <div class="row q-col-gutter-sm q-mb-md">
+          <div class="col-12 col-sm-4">
+            <q-select
+              v-model="activityActionFilter"
+              :options="activityActionOptions"
+              dense outlined label="Filter by action"
+              clearable emit-value map-options
+            />
+          </div>
+          <div class="col-12 col-sm-8">
+            <q-input v-model="activitySearch" dense outlined placeholder="Search details, wallet, IP..." clearable>
+              <template v-slot:prepend><q-icon name="search" /></template>
+            </q-input>
+          </div>
         </div>
 
         <div style="max-height: 500px; overflow-y: auto;">
@@ -741,6 +789,9 @@
           feature_audit_logging: true,
         },
         savingFeature: false,
+        // Flasher exe upload
+        flasherExeFile: null,
+        uploadingFlasher: false,
         // Flash Codes
         flashCodes: [],
         loadingFlashCodes: false,
@@ -805,6 +856,13 @@
     methods: {
       formatSats(sats) {
         return new Intl.NumberFormat().format(sats)
+      },
+
+      formatFileSize(bytes) {
+        if (!bytes || bytes === 0) return '0 B'
+        const units = ['B', 'KB', 'MB', 'GB']
+        const i = Math.floor(Math.log(bytes) / Math.log(1024))
+        return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
       },
 
       formatDate(timestamp) {
@@ -1273,6 +1331,28 @@
       },
 
       // Audit Log
+      async uploadFlasherExe() {
+        if (!this.flasherExeFile) return
+        this.uploadingFlasher = true
+        try {
+          const formData = new FormData()
+          formData.append('file', this.flasherExeFile)
+          await fetch(
+            '/tnaflasher/api/v1/admin/tools/upload-flasher',
+            {
+              method: 'POST',
+              headers: { 'X-Api-Key': this.g.user.wallets[0].adminkey },
+              body: formData
+            }
+          )
+          this.$q.notify({ type: 'positive', message: 'Flasher binary updated successfully!' })
+          this.flasherExeFile = null
+        } catch (e) {
+          this.$q.notify({ type: 'negative', message: 'Upload failed: ' + e })
+        }
+        this.uploadingFlasher = false
+      },
+
       async loadFlashCodes() {
         this.loadingFlashCodes = true
         try {
