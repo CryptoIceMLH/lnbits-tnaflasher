@@ -372,29 +372,6 @@
           </q-card-section>
         </q-card>
 
-        <!-- Downgrade card (SSH devices only) -->
-        <q-card v-if="walletValid && devices.length > 0 && isSSHDevice" class="q-mb-md tna-card">
-          <q-card-section>
-            <div class="row items-center q-mb-md">
-              <q-badge color="warning" class="q-mr-sm" style="color:#000;">!</q-badge>
-              <span class="text-h6 text-tna-primary">Stock Bitmain Miner? Downgrade First</span>
-            </div>
-            <div class="text-tna-secondary q-mb-md" style="font-size:0.92rem; line-height:1.7;">
-              If your miner is running <strong class="text-tna-accent">stock Bitmain firmware</strong>, you must downgrade it to a supported version before flashing TNA-OS.<br>
-              Extract the archive and copy the <strong class="text-tna-accent">3 files</strong> to the root of an SD card or USB drive, then boot the miner from it.
-            </div>
-            <div class="text-center">
-              <a
-                href="/tnaflasher/api/v1/tools/downgrade"
-                style="display:inline-block; background: #444; color: #fff; font-weight: 600; font-size: 0.9rem; padding: 9px 22px; border-radius: 6px; text-decoration: none;"
-              >
-                &#11015; Download Downgrade Archive
-              </a>
-              <div class="text-caption text-tna-muted q-mt-sm">Extract and copy 3 files to SD card root</div>
-            </div>
-          </q-card-section>
-        </q-card>
-
         <!-- Step 3: Pay -->
         <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !selectedVersion }">
           <q-card-section>
@@ -564,6 +541,26 @@
               <p class="text-tna-muted q-mt-sm">Your device has been flashed successfully.</p>
               <q-btn flat label="Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
             </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Downgrade info (SSH only, no gate, purely informational) -->
+        <q-card v-if="walletValid && devices.length > 0 && isSSHDevice" class="q-mb-md tna-card">
+          <q-card-section>
+            <div class="row items-center q-mb-sm">
+              <span style="font-size:1.2em; margin-right:8px;">⚠️</span>
+              <span class="text-subtitle1 text-tna-primary">Stock Bitmain Miner? Downgrade First</span>
+            </div>
+            <div class="text-tna-secondary q-mb-md" style="font-size:0.88rem; line-height:1.7;">
+              Running <strong class="text-tna-accent">stock Bitmain firmware</strong>? Download the archive, extract it, and copy the <strong class="text-tna-accent">3 files</strong> to the root of an SD card — then boot the miner from it to downgrade before flashing TNA-OS.
+            </div>
+            <a
+              href="/tnaflasher/api/v1/tools/downgrade"
+              style="display:inline-block; background:#444; color:#fff; font-weight:600; font-size:0.88rem; padding:8px 18px; border-radius:6px; text-decoration:none;"
+            >
+              &#11015; Download Downgrade Archive
+            </a>
+            <span class="text-caption text-tna-muted q-ml-sm">Extract &amp; copy 3 files to SD root</span>
           </q-card-section>
         </q-card>
 
