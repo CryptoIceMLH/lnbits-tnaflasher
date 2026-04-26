@@ -62,6 +62,7 @@ from .crud import (
     mark_flash_code_used,
     check_rate_limit,
     record_rate_limit_attempt,
+    get_all_flash_codes,
 )
 from .services import (
     get_available_devices,
@@ -352,6 +353,24 @@ async def api_download_single_file(
                 from fastapi.responses import Response
                 return Response(content=data, media_type="application/octet-stream")
     raise HTTPException(status_code=404, detail=f"File {file} not found in firmware")
+
+
+@tnaflasher_api_router.get("/admin/flash-codes")
+async def api_admin_get_flash_codes(
+    limit: int = Query(200, ge=1, le=1000),
+    user: User = Depends(check_admin)
+):
+    """Get all SSH flash codes with status (admin only)"""
+    codes = await get_all_flash_codes(limit=limit)
+    miners = {m.id: m for m in await get_miners()}
+    result = []
+    for c in codes:
+        miner = miners.get(c.device)
+        result.append({
+            **c.dict(),
+            "miner_name": miner.name if miner else c.device
+        })
+    return {"flash_codes": result}
 
 
 @tnaflasher_api_router.get("/tools/TNA-OS Flasher.exe")

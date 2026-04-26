@@ -519,6 +519,62 @@
     </q-card>
   </div>
 
+  <!-- SSH Flash Codes -->
+  <div class="col-12">
+    <q-card>
+      <q-card-section>
+        <div class="row items-center q-mb-md">
+          <div class="text-h6">SSH Flash Codes</div>
+          <q-space></q-space>
+          <q-select
+            v-model="flashCodeFilter"
+            :options="['all','unused','used','expired']"
+            dense outlined label="Status" style="width:120px"
+            class="q-mr-sm"
+          />
+          <q-btn flat icon="refresh" @click="loadFlashCodes" :loading="loadingFlashCodes">
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
+        </div>
+
+        <div style="max-height: 400px; overflow-y: auto;">
+          <q-table
+            :rows="filteredFlashCodes"
+            :columns="flashCodeColumns"
+            row-key="id"
+            :loading="loadingFlashCodes"
+            :pagination="{ rowsPerPage: 50, sortBy: 'created_at', descending: true }"
+            flat bordered dense
+          >
+            <template v-slot:body-cell-status="props">
+              <q-td :props="props">
+                <q-badge :color="getFlashCodeColor(props.row.status)" :label="props.row.status" />
+              </q-td>
+            </template>
+            <template v-slot:body-cell-created_at="props">
+              <q-td :props="props">${ formatDate(props.row.created_at) }</q-td>
+            </template>
+            <template v-slot:body-cell-expires_at="props">
+              <q-td :props="props">
+                <span :class="props.row.status === 'unused' && props.row.expires_at * 1000 > Date.now() ? 'text-positive' : 'text-grey'">
+                  ${ formatDate(props.row.expires_at) }
+                </span>
+              </q-td>
+            </template>
+            <template v-slot:body-cell-used_at="props">
+              <q-td :props="props">${ props.row.used_at ? formatDate(props.row.used_at) : '-' }</q-td>
+            </template>
+            <template v-slot:body-cell-code="props">
+              <q-td :props="props">
+                <code style="font-size:0.9em; letter-spacing:1px;">${ props.row.code }</code>
+              </q-td>
+            </template>
+          </q-table>
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+
   <!-- Activity Log -->
   <div class="col-12">
     <q-card>
@@ -526,6 +582,12 @@
         <div class="row items-center q-mb-md">
           <div class="text-h6">Activity Log</div>
           <q-space></q-space>
+          <q-select
+            v-model="activityActionFilter"
+            :options="activityActionOptions"
+            dense outlined label="Filter" style="width:160px"
+            class="q-mr-sm" clearable emit-value map-options
+          />
           <q-input v-model="activitySearch" dense outlined placeholder="Search..."
                    style="width:220px" class="q-mr-sm" clearable>
             <template v-slot:prepend><q-icon name="search" /></template>
@@ -541,13 +603,13 @@
           </q-btn>
         </div>
 
-        <div style="max-height: 400px; overflow-y: auto;">
+        <div style="max-height: 500px; overflow-y: auto;">
           <q-table
             :rows="filteredActivity"
             :columns="activityColumns"
             row-key="id"
             :loading="loadingActivity"
-            :pagination="{ rowsPerPage: 50, sortBy: 'created_at', descending: true }"
+            :pagination="{ rowsPerPage: 100, sortBy: 'created_at', descending: true }"
             flat bordered dense
           >
             <template v-slot:body-cell-created_at="props">
@@ -556,6 +618,11 @@
             <template v-slot:body-cell-action="props">
               <q-td :props="props">
                 <q-badge :color="getActionColor(props.row.action)" :label="props.row.action" />
+              </q-td>
+            </template>
+            <template v-slot:body-cell-details="props">
+              <q-td :props="props" style="max-width:420px; white-space:normal; word-break:break-word;">
+                ${ props.row.details }
               </q-td>
             </template>
           </q-table>
@@ -674,15 +741,37 @@
           feature_audit_logging: true,
         },
         savingFeature: false,
+        // Flash Codes
+        flashCodes: [],
+        loadingFlashCodes: false,
+        flashCodeFilter: 'all',
+        flashCodeColumns: [
+          { name: 'created_at', label: 'Issued', field: 'created_at', align: 'left', sortable: true },
+          { name: 'code', label: 'Code', field: 'code', align: 'left' },
+          { name: 'status', label: 'Status', field: 'status', align: 'left', sortable: true },
+          { name: 'miner_name', label: 'Device', field: 'miner_name', align: 'left' },
+          { name: 'version', label: 'Version', field: 'version', align: 'left' },
+          { name: 'expires_at', label: 'Expires', field: 'expires_at', align: 'left', sortable: true },
+          { name: 'used_at', label: 'Used At', field: 'used_at', align: 'left', sortable: true },
+          { name: 'used_ip', label: 'Used From IP', field: 'used_ip', align: 'left' },
+        ],
         // Activity Log
         activityLog: [],
         loadingActivity: false,
         activitySearch: '',
+        activityActionFilter: null,
+        activityActionOptions: [
+          { label: 'All', value: null },
+          { label: 'Invoice Created', value: 'invoice_created' },
+          { label: 'Flash Paid', value: 'flash_paid' },
+          { label: 'SSH Flash Started', value: 'ssh_flash_started' },
+          { label: 'Firmware Download', value: 'firmware_download' },
+          { label: 'Flash Complete', value: 'flash_complete' },
+        ],
         activityColumns: [
-          { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true },
-          { name: 'action', label: 'Action', field: 'action', align: 'left', sortable: true },
-          { name: 'wallet_id', label: 'Wallet', field: 'wallet_id', align: 'left' },
-          { name: 'device_mac', label: 'Device MAC', field: 'device_mac', align: 'left' },
+          { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true, style: 'width:150px' },
+          { name: 'action', label: 'Action', field: 'action', align: 'left', sortable: true, style: 'width:160px' },
+          { name: 'wallet_id', label: 'Wallet', field: 'wallet_id', align: 'left', style: 'width:80px' },
           { name: 'details', label: 'Details', field: 'details', align: 'left' },
         ]
       }
@@ -693,14 +782,22 @@
         if (!this.selectedWallet) return 'Select a wallet first'
         return `${window.location.origin}/tnaflasher/${this.selectedWallet}`
       },
+      filteredFlashCodes() {
+        if (this.flashCodeFilter === 'all') return this.flashCodes
+        return this.flashCodes.filter(c => c.status === this.flashCodeFilter)
+      },
+
       filteredActivity() {
-        if (!this.activitySearch) return this.activityLog
+        let rows = this.activityLog
+        if (this.activityActionFilter) {
+          rows = rows.filter(e => e.action === this.activityActionFilter)
+        }
+        if (!this.activitySearch) return rows
         const q = this.activitySearch.toLowerCase()
-        return this.activityLog.filter(e =>
+        return rows.filter(e =>
           (e.action || '').toLowerCase().includes(q) ||
           (e.details || '').toLowerCase().includes(q) ||
-          (e.wallet_id || '').toLowerCase().includes(q) ||
-          (e.device_mac || '').toLowerCase().includes(q)
+          (e.wallet_id || '').toLowerCase().includes(q)
         )
       }
     },
@@ -1176,6 +1273,23 @@
       },
 
       // Audit Log
+      async loadFlashCodes() {
+        this.loadingFlashCodes = true
+        try {
+          const res = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/flash-codes?limit=500',
+            this.g.user.wallets[0].adminkey
+          )
+          this.flashCodes = res.data.flash_codes || []
+        } catch(e) {
+          console.error('loadFlashCodes', e)
+          this.flashCodes = []
+        } finally {
+          this.loadingFlashCodes = false
+        }
+      },
+
       async loadActivityLog() {
         this.loadingActivity = true
         try {
@@ -1234,10 +1348,15 @@
         })
       },
 
+      getFlashCodeColor(status) {
+        return { unused: 'positive', used: 'grey', expired: 'negative' }[status] || 'grey'
+      },
+
       getActionColor(action) {
         const colors = {
           flash_paid: 'positive', flash_complete: 'green',
           invoice_created: 'blue', firmware_download: 'cyan',
+          ssh_flash_started: 'orange',
           device_connect: 'info', connect: 'info',
           serial_monitor_start: 'blue-grey', serial_monitor_stop: 'blue-grey',
           register_read: 'grey',
@@ -1262,6 +1381,7 @@
       try { await this.loadBulletins() } catch(e) { console.error('loadBulletins', e) }
       try { await this.loadPromoCodes() } catch(e) { console.error('loadPromoCodes', e) }
       try { await this.loadFeatureFlags() } catch(e) { console.error('loadFeatureFlags', e) }
+      try { await this.loadFlashCodes() } catch(e) { console.error('loadFlashCodes', e) }
       try { await this.loadActivityLog() } catch(e) { console.error('loadActivityLog', e) }
     }
   })

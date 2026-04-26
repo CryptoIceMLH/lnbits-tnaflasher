@@ -831,6 +831,19 @@ async def expire_flash_codes() -> int:
     return 0
 
 
+async def get_all_flash_codes(limit: int = 200) -> list[FlashCode]:
+    """Get all flash codes, newest first"""
+    rows = await db.fetchall(
+        """
+        SELECT * FROM tnaflasher.flash_codes
+        ORDER BY created_at DESC
+        LIMIT :limit
+        """,
+        {"limit": limit}
+    )
+    return [FlashCode(**row) for row in rows]
+
+
 # ============== Rate Limiting ==============
 
 async def check_rate_limit(
