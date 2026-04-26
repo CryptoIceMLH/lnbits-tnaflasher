@@ -530,7 +530,27 @@
   <div class="col-12">
     <q-card>
       <q-card-section>
-        <div class="text-h6 q-mb-xs">Flash Tool Binary (TNA-OS Flasher.exe)</div>
+        <div class="row items-center q-mb-xs">
+          <div class="text-h6">Flash Tool Binary (TNA-OS Flasher.exe)</div>
+          <q-space></q-space>
+          <q-btn flat dense icon="refresh" @click="loadFlasherInfo">
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
+        </div>
+
+        <!-- Current file info -->
+        <div v-if="flasherInfo.exists" class="q-mb-md q-pa-sm" style="background: rgba(255,255,255,0.04); border-radius: 6px; border: 1px solid #333;">
+          <div class="row items-center q-gutter-sm">
+            <q-icon name="check_circle" color="positive" size="sm" />
+            <span class="text-weight-medium">TNA-OS Flasher.exe</span>
+            <q-badge color="orange">${ flasherInfo.size_mb } MB</q-badge>
+            <span class="text-caption text-grey">Updated: ${ formatDate(flasherInfo.modified_at) }</span>
+          </div>
+        </div>
+        <div v-else-if="flasherInfo.exists === false" class="text-caption text-negative q-mb-md">
+          No flasher binary on disk yet — upload one below.
+        </div>
+
         <div class="text-caption text-grey q-mb-md">Replace the compiled flasher that users download after paying for SSH flashing.</div>
         <div class="row q-col-gutter-sm items-end">
           <div class="col-12 col-sm-6">
@@ -792,6 +812,7 @@
         // Flasher exe upload
         flasherExeFile: null,
         uploadingFlasher: false,
+        flasherInfo: {},
         // Flash Codes
         flashCodes: [],
         loadingFlashCodes: false,
@@ -1331,6 +1352,19 @@
       },
 
       // Audit Log
+      async loadFlasherInfo() {
+        try {
+          const res = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/tools/flasher-info',
+            this.g.user.wallets[0].adminkey
+          )
+          this.flasherInfo = res.data
+        } catch(e) {
+          console.error('loadFlasherInfo', e)
+        }
+      },
+
       async uploadFlasherExe() {
         if (!this.flasherExeFile) return
         this.uploadingFlasher = true
@@ -1352,6 +1386,7 @@
             message: `TNA-OS Flasher.exe updated — ${result.size_mb} MB uploaded successfully`
           })
           this.flasherExeFile = null
+          await this.loadFlasherInfo()
         } catch (e) {
           this.$q.notify({ type: 'negative', message: 'Upload failed: ' + e })
         }
@@ -1466,6 +1501,7 @@
       try { await this.loadBulletins() } catch(e) { console.error('loadBulletins', e) }
       try { await this.loadPromoCodes() } catch(e) { console.error('loadPromoCodes', e) }
       try { await this.loadFeatureFlags() } catch(e) { console.error('loadFeatureFlags', e) }
+      try { await this.loadFlasherInfo() } catch(e) { console.error('loadFlasherInfo', e) }
       try { await this.loadFlashCodes() } catch(e) { console.error('loadFlashCodes', e) }
       try { await this.loadActivityLog() } catch(e) { console.error('loadActivityLog', e) }
     }

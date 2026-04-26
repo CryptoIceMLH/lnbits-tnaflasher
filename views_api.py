@@ -373,6 +373,22 @@ async def api_admin_get_flash_codes(
     return {"flash_codes": result}
 
 
+@tnaflasher_api_router.get("/admin/tools/flasher-info")
+async def api_admin_flasher_info(user: User = Depends(check_admin)):
+    """Get info about the current TNA-OS Flasher.exe on disk."""
+    import time as _time
+    path = Path(__file__).parent / "static" / "tools" / "TNA-OS Flasher.exe"
+    if not path.exists():
+        return {"exists": False}
+    stat = path.stat()
+    return {
+        "exists": True,
+        "size": stat.st_size,
+        "size_mb": round(stat.st_size / 1024 / 1024, 2),
+        "modified_at": int(stat.st_mtime)
+    }
+
+
 @tnaflasher_api_router.post("/admin/tools/upload-flasher")
 async def api_admin_upload_flasher(
     file: UploadFile = File(...),
