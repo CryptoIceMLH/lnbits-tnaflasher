@@ -539,16 +539,11 @@
         </div>
 
         <!-- Current file info -->
-        <div v-if="flasherInfo.exists" class="q-mb-md q-pa-sm" style="background: rgba(255,255,255,0.04); border-radius: 6px; border: 1px solid #333;">
-          <div class="row items-center q-gutter-sm">
-            <q-icon name="check_circle" color="positive" size="sm" />
-            <span class="text-weight-medium">TNA-OS Flasher.exe</span>
-            <q-badge color="orange">${ flasherInfo.size_mb } MB</q-badge>
-            <span class="text-caption text-grey">Updated: ${ formatDate(flasherInfo.modified_at) }</span>
-          </div>
-        </div>
-        <div v-else-if="flasherInfo.exists === false" class="text-caption text-negative q-mb-md">
-          No flasher binary on disk yet — upload one below.
+        <div class="text-caption text-grey q-mb-md">
+          <span v-if="flasherInfo.exists">
+            TNA-OS Flasher.exe &mdash; ${ flasherInfo.size_mb } MB &mdash; Updated: ${ formatDate(flasherInfo.modified_at) }
+          </span>
+          <span v-else-if="flasherInfo.exists === false" class="text-negative">No flasher binary on disk yet</span>
         </div>
 
         <div class="text-caption text-grey q-mb-md">Replace the compiled flasher that users download after paying for SSH flashing.</div>
@@ -575,6 +570,49 @@
               :disable="!flasherExeFile"
               :loading="uploadingFlasher"
               @click="uploadFlasherExe"
+            />
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <!-- Downgrade Archive Upload -->
+  <div class="col-12">
+    <q-card>
+      <q-card-section>
+        <div class="row items-center q-mb-xs">
+          <div class="text-h6">Downgrade Archive (downgrade.zip)</div>
+          <q-space></q-space>
+          <q-btn flat dense icon="refresh" @click="loadDowngradeInfo">
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
+        </div>
+        <div class="text-caption text-grey q-mb-md">
+          <span v-if="downgradeInfo.exists">
+            downgrade.zip &mdash; ${ downgradeInfo.size_mb } MB &mdash; Updated: ${ formatDate(downgradeInfo.modified_at) }
+          </span>
+          <span v-else-if="downgradeInfo.exists === false" class="text-negative">No downgrade archive on disk yet</span>
+        </div>
+        <div class="text-caption text-grey q-mb-md">Bitmain downgrade files served publicly — users download before flashing TNA-OS.</div>
+        <div class="row q-col-gutter-sm items-end">
+          <div class="col-12 col-sm-6">
+            <q-file v-model="downgradeFile" label="Select downgrade.zip" accept=".zip" outlined dense>
+              <template v-slot:prepend><q-icon name="attach_file" /></template>
+            </q-file>
+            <div v-if="downgradeFile" class="text-caption text-grey-6 q-mt-xs q-pl-xs">
+              ${ downgradeFile.name } &mdash; ${ formatFileSize(downgradeFile.size) }
+            </div>
+          </div>
+          <div class="col-auto">
+            <q-btn
+              color="primary"
+              icon="upload"
+              label="Upload Archive"
+              unelevated
+              :disable="!downgradeFile"
+              :loading="uploadingDowngrade"
+              @click="uploadDowngradeArchive"
             />
           </div>
         </div>
@@ -813,6 +851,10 @@
         flasherExeFile: null,
         uploadingFlasher: false,
         flasherInfo: {},
+        // Downgrade archive
+        downgradeFile: null,
+        uploadingDowngrade: false,
+        downgradeInfo: {},
         // Flash Codes
         flashCodes: [],
         loadingFlashCodes: false,
@@ -1352,6 +1394,35 @@
       },
 
       // Audit Log
+      async loadDowngradeInfo() {
+        try {
+          const res = await LNbits.api.request('GET', '/tnaflasher/api/v1/admin/tools/downgrade-info', this.g.user.wallets[0].adminkey)
+          this.downgradeInfo = res.data
+        } catch(e) { console.error('loadDowngradeInfo', e) }
+      },
+
+      async uploadDowngradeArchive() {
+        if (!this.downgradeFile) return
+        this.uploadingDowngrade = true
+        try {
+          const formData = new FormData()
+          formData.append('file', this.downgradeFile)
+          const resp = await fetch('/tnaflasher/api/v1/admin/tools/upload-downgrade', {
+            method: 'POST',
+            headers: { 'X-Api-Key': this.g.user.wallets[0].adminkey },
+            body: formData
+          })
+          if (!resp.ok) throw new Error(`Server error ${resp.status}`)
+          const result = await resp.json()
+          this.$q.notify({ type: 'positive', message: `downgrade.zip updated — ${result.size_mb} MB uploaded successfully` })
+          this.downgradeFile = null
+          await this.loadDowngradeInfo()
+        } catch (e) {
+          this.$q.notify({ type: 'negative', message: 'Upload failed: ' + e })
+        }
+        this.uploadingDowngrade = false
+      },
+
       async loadFlasherInfo() {
         try {
           const res = await LNbits.api.request(
@@ -1502,6 +1573,7 @@
       try { await this.loadPromoCodes() } catch(e) { console.error('loadPromoCodes', e) }
       try { await this.loadFeatureFlags() } catch(e) { console.error('loadFeatureFlags', e) }
       try { await this.loadFlasherInfo() } catch(e) { console.error('loadFlasherInfo', e) }
+      try { await this.loadDowngradeInfo() } catch(e) { console.error('loadDowngradeInfo', e) }
       try { await this.loadFlashCodes() } catch(e) { console.error('loadFlashCodes', e) }
       try { await this.loadActivityLog() } catch(e) { console.error('loadActivityLog', e) }
     }

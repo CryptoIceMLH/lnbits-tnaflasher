@@ -373,6 +373,52 @@ async def api_admin_get_flash_codes(
     return {"flash_codes": result}
 
 
+@tnaflasher_api_router.get("/tools/downgrade")
+async def api_download_downgrade():
+    """Serve the Bitmain downgrade archive (public — no auth needed)."""
+    path = Path(__file__).parent / "static" / "tools" / "downgrade.zip"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Downgrade archive not available")
+    return FileResponse(path, filename="downgrade.zip", media_type="application/zip")
+
+
+@tnaflasher_api_router.get("/admin/tools/downgrade-info")
+async def api_admin_downgrade_info(user: User = Depends(check_admin)):
+    """Get info about the current downgrade archive on disk."""
+    path = Path(__file__).parent / "static" / "tools" / "downgrade.zip"
+    if not path.exists():
+        return {"exists": False}
+    stat = path.stat()
+    return {
+        "exists": True,
+        "size": stat.st_size,
+        "size_mb": round(stat.st_size / 1024 / 1024, 2),
+        "modified_at": int(stat.st_mtime)
+    }
+
+
+@tnaflasher_api_router.post("/admin/tools/upload-downgrade")
+async def api_admin_upload_downgrade(
+    file: UploadFile = File(...),
+    user: User = Depends(check_admin)
+):
+    """Upload the Bitmain downgrade archive (.zip) to replace the current one."""
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="File must be a .zip")
+    path = Path(__file__).parent / "static" / "tools" / "downgrade.zip"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    contents = await file.read()
+    path.write_bytes(contents)
+    size_mb = round(len(contents) / 1024 / 1024, 2)
+    await create_audit_log(
+        wallet_id=user.id,
+        action="downgrade_updated",
+        details=f"downgrade.zip replaced: {size_mb} MB ({len(contents)} bytes)",
+        device_mac=None
+    )
+    return {"ok": True, "size": len(contents), "size_mb": size_mb, "filename": "downgrade.zip"}
+
+
 @tnaflasher_api_router.get("/admin/tools/flasher-info")
 async def api_admin_flasher_info(user: User = Depends(check_admin)):
     """Get info about the current TNA-OS Flasher.exe on disk."""
