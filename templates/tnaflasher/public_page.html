@@ -572,21 +572,23 @@
               <div class="q-pa-md q-mb-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px; text-align: left;">
                 <div class="text-weight-bold text-tna-accent q-mb-sm">Instructions:</div>
                 <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height: 2;">
-                  <li>Download the flash tool: <a :href="flashToolUrl" class="text-tna-accent" style="text-decoration: underline;" target="_blank">tna-flash.py</a></li>
-                  <li>Install requirements: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">pip install paramiko requests</code></li>
-                  <li>Run: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px;">python tna-flash.py</code></li>
-                  <li>Enter your miner's IP address and the flash code above</li>
+                  <li>Download <strong class="text-tna-accent">TNA-OS Flasher.exe</strong> below (Windows, no Python needed)</li>
+                  <li>Run it and enter your miner's IP address and the flash code above</li>
                   <li>Wait for the flash to complete, then <strong class="text-tna-accent">power cycle</strong> your miner</li>
                 </ol>
               </div>
 
               <q-btn
-                color="primary"
-                label="Download Flash Tool"
-                :href="flashToolUrl"
+                color="orange"
+                icon="download"
+                label="Download TNA-OS Flasher.exe"
+                :href="flashExeUrl"
                 target="_blank"
                 size="lg"
+                unelevated
+                no-caps
               />
+              <div class="text-caption text-tna-muted q-mt-xs">Windows executable — no Python install required</div>
 
               <div class="q-mt-lg">
                 <q-btn flat label="Flash Another Device" @click="resetAll" class="text-tna-accent" />
@@ -804,6 +806,10 @@
 
         flashToolUrl() {
           return window.location.origin + '/tnaflasher/api/v1/tools/tna-flash.py'
+        },
+
+        flashExeUrl() {
+          return window.location.origin + '/tnaflasher/api/v1/tools/TNA-OS%20Flasher.exe'
         }
       },
 

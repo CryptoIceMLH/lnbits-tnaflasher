@@ -354,9 +354,22 @@ async def api_download_single_file(
     raise HTTPException(status_code=404, detail=f"File {file} not found in firmware")
 
 
+@tnaflasher_api_router.get("/tools/TNA-OS Flasher.exe")
+async def api_download_flash_exe():
+    """Serve compiled TNA-OS Flasher Windows executable."""
+    path = Path(__file__).parent / "static" / "tools" / "TNA-OS Flasher.exe"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Flash tool binary not yet available")
+    return FileResponse(
+        path,
+        filename="TNA-OS Flasher.exe",
+        media_type="application/octet-stream"
+    )
+
+
 @tnaflasher_api_router.get("/tools/tna-flash.py")
-async def api_get_flash_tool():
-    """Download the TNA flash tool script"""
+async def api_get_flash_tool(user: User = Depends(check_admin)):
+    """Download the legacy TNA flash tool script (admin only)"""
     tool_path = Path(__file__).parent / "static" / "tools" / "tna-flash.py"
     if not tool_path.exists():
         raise HTTPException(status_code=404, detail="Flash tool not found")
