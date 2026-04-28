@@ -433,6 +433,26 @@ async def api_admin_upload_downgrade(
     return {"ok": True, "size": len(contents), "size_mb": size_mb, "filename": "downgrade.zip"}
 
 
+@tnaflasher_api_router.delete("/admin/tools/flasher")
+async def api_admin_delete_flasher(user: User = Depends(check_admin)):
+    """Delete the uploaded TNA-OS Flasher.exe from persistent storage."""
+    path = _tools_dir() / "TNA-OS Flasher.exe"
+    if path.exists():
+        path.unlink()
+        return {"ok": True}
+    raise HTTPException(status_code=404, detail="No uploaded flasher found")
+
+
+@tnaflasher_api_router.delete("/admin/tools/downgrade")
+async def api_admin_delete_downgrade(user: User = Depends(check_admin)):
+    """Delete the uploaded downgrade.zip from persistent storage."""
+    path = _tools_dir() / "downgrade.zip"
+    if path.exists():
+        path.unlink()
+        return {"ok": True}
+    raise HTTPException(status_code=404, detail="No uploaded downgrade archive found")
+
+
 @tnaflasher_api_router.get("/admin/tools/flasher-info")
 async def api_admin_flasher_info(user: User = Depends(check_admin)):
     """Get info about the current TNA-OS Flasher.exe on disk."""
