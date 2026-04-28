@@ -388,6 +388,26 @@ def _tool_path(filename: str) -> Path:
     return Path(__file__).parent / "static" / "tools" / filename
 
 
+@tnaflasher_api_router.get("/tools/flasher-info")
+async def api_public_flasher_info():
+    """Return mtime of the current TNA-OS Flasher.exe (public, for cache-busting)."""
+    path = _tool_path("TNA-OS Flasher.exe")
+    if not path.exists():
+        return {"exists": False}
+    stat = path.stat()
+    return {"exists": True, "modified_at": int(stat.st_mtime)}
+
+
+@tnaflasher_api_router.get("/tools/downgrade-info")
+async def api_public_downgrade_info():
+    """Return mtime of the current downgrade.zip (public, for cache-busting)."""
+    path = _tool_path("downgrade.zip")
+    if not path.exists():
+        return {"exists": False}
+    stat = path.stat()
+    return {"exists": True, "modified_at": int(stat.st_mtime)}
+
+
 @tnaflasher_api_router.get("/tools/downgrade")
 async def api_download_downgrade():
     """Serve the Bitmain downgrade archive (public — no auth needed)."""

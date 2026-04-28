@@ -382,7 +382,7 @@
             Running <strong class="text-tna-accent">stock Bitmain firmware</strong>? Download the archive, extract it, and copy the <strong class="text-tna-accent">3 files</strong> to the root of an SD card — then boot the miner from it to downgrade before flashing TNA-OS.
           </div>
           <a
-            href="/tnaflasher/api/v1/tools/downgrade"
+            :href="downgradeArchiveUrl"
             style="display:inline-block; background:#444; color:#fff; font-weight:600; font-size:0.88rem; padding:8px 18px; border-radius:6px; text-decoration:none;"
           >
             &#11015; Download Downgrade Archive
@@ -764,6 +764,10 @@
           flashCodeExpiresAt: null,
           flashCodeCountdown: '',
 
+          // Tool file versions (mtime-based cache busting)
+          flasherMtime: 0,
+          downgradeMtime: 0,
+
           // Notifications
           notification: null
         }
@@ -833,7 +837,13 @@
         },
 
         flashExeUrl() {
-          return window.location.origin + '/tnaflasher/api/v1/tools/TNA-OS%20Flasher.exe'
+          const base = window.location.origin + '/tnaflasher/api/v1/tools/TNA-OS%20Flasher.exe'
+          return this.flasherMtime ? base + '?v=' + this.flasherMtime : base
+        },
+
+        downgradeArchiveUrl() {
+          const base = window.location.origin + '/tnaflasher/api/v1/tools/downgrade'
+          return this.downgradeMtime ? base + '?v=' + this.downgradeMtime : base
         }
       },
 
@@ -845,6 +855,23 @@
         } catch (err) {
           console.error('Failed to load feature flags:', err);
           this.showAdvanced = true;
+        }
+        // Load tool mtimes for cache-busting download URLs
+        try {
+          const [flasherRes, downgradeRes] = await Promise.all([
+            fetch('/tnaflasher/api/v1/tools/flasher-info'),
+            fetch('/tnaflasher/api/v1/tools/downgrade-info')
+          ])
+          if (flasherRes.ok) {
+            const fi = await flasherRes.json()
+            if (fi.modified_at) this.flasherMtime = fi.modified_at
+          }
+          if (downgradeRes.ok) {
+            const di = await downgradeRes.json()
+            if (di.modified_at) this.downgradeMtime = di.modified_at
+          }
+        } catch (e) {
+          // non-fatal — URLs work without the version suffix
         }
       },
 
