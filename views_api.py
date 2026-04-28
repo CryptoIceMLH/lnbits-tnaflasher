@@ -373,10 +373,25 @@ async def api_admin_get_flash_codes(
     return {"flash_codes": result}
 
 
+def _tools_dir() -> Path:
+    """Persistent writable tools directory — survives extension updates."""
+    d = get_firmware_dir().parent / "tools"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _tool_path(filename: str) -> Path:
+    """Return path to a tool file — persistent data dir takes priority over static."""
+    persistent = _tools_dir() / filename
+    if persistent.exists():
+        return persistent
+    return Path(__file__).parent / "static" / "tools" / filename
+
+
 @tnaflasher_api_router.get("/tools/downgrade")
 async def api_download_downgrade():
     """Serve the Bitmain downgrade archive (public — no auth needed)."""
-    path = Path(__file__).parent / "static" / "tools" / "downgrade.zip"
+    path = _tool_path("downgrade.zip")
     if not path.exists():
         raise HTTPException(status_code=404, detail="Downgrade archive not available")
     return FileResponse(path, filename="downgrade.zip", media_type="application/zip")
@@ -385,7 +400,7 @@ async def api_download_downgrade():
 @tnaflasher_api_router.get("/admin/tools/downgrade-info")
 async def api_admin_downgrade_info(user: User = Depends(check_admin)):
     """Get info about the current downgrade archive on disk."""
-    path = Path(__file__).parent / "static" / "tools" / "downgrade.zip"
+    path = _tool_path("downgrade.zip")
     if not path.exists():
         return {"exists": False}
     stat = path.stat()
@@ -405,8 +420,7 @@ async def api_admin_upload_downgrade(
     """Upload the Bitmain downgrade archive (.zip) to replace the current one."""
     if not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="File must be a .zip")
-    path = Path(__file__).parent / "static" / "tools" / "downgrade.zip"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = _tools_dir() / "downgrade.zip"
     contents = await file.read()
     path.write_bytes(contents)
     size_mb = round(len(contents) / 1024 / 1024, 2)
@@ -422,8 +436,7 @@ async def api_admin_upload_downgrade(
 @tnaflasher_api_router.get("/admin/tools/flasher-info")
 async def api_admin_flasher_info(user: User = Depends(check_admin)):
     """Get info about the current TNA-OS Flasher.exe on disk."""
-    import time as _time
-    path = Path(__file__).parent / "static" / "tools" / "TNA-OS Flasher.exe"
+    path = _tool_path("TNA-OS Flasher.exe")
     if not path.exists():
         return {"exists": False}
     stat = path.stat()
@@ -443,8 +456,7 @@ async def api_admin_upload_flasher(
     """Upload a new TNA-OS Flasher.exe to replace the current one (admin only)."""
     if not file.filename.lower().endswith(".exe"):
         raise HTTPException(status_code=400, detail="File must be a .exe")
-    path = Path(__file__).parent / "static" / "tools" / "TNA-OS Flasher.exe"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = _tools_dir() / "TNA-OS Flasher.exe"
     contents = await file.read()
     path.write_bytes(contents)
     size_mb = round(len(contents) / 1024 / 1024, 2)
@@ -460,7 +472,7 @@ async def api_admin_upload_flasher(
 @tnaflasher_api_router.get("/tools/TNA-OS Flasher.exe")
 async def api_download_flash_exe():
     """Serve compiled TNA-OS Flasher Windows executable."""
-    path = Path(__file__).parent / "static" / "tools" / "TNA-OS Flasher.exe"
+    path = _tool_path("TNA-OS Flasher.exe")
     if not path.exists():
         raise HTTPException(status_code=404, detail="Flash tool binary not yet available")
     return FileResponse(
