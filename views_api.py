@@ -381,11 +381,8 @@ def _tools_dir() -> Path:
 
 
 def _tool_path(filename: str) -> Path:
-    """Return path to a tool file — persistent data dir takes priority over static."""
-    persistent = _tools_dir() / filename
-    if persistent.exists():
-        return persistent
-    return Path(__file__).parent / "static" / "tools" / filename
+    """Return path to a tool file in the persistent data dir."""
+    return _tools_dir() / filename
 
 
 @tnaflasher_api_router.get("/tools/flasher-info")
