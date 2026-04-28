@@ -391,10 +391,12 @@ def _tool_path(filename: str) -> Path:
 @tnaflasher_api_router.get("/tools/downgrade")
 async def api_download_downgrade():
     """Serve the Bitmain downgrade archive (public — no auth needed)."""
+    from fastapi.responses import FileResponse as _FR
     path = _tool_path("downgrade.zip")
     if not path.exists():
         raise HTTPException(status_code=404, detail="Downgrade archive not available")
-    return FileResponse(path, filename="downgrade.zip", media_type="application/zip")
+    return _FR(path, filename="downgrade.zip", media_type="application/zip",
+               headers={"Cache-Control": "no-store"})
 
 
 @tnaflasher_api_router.get("/admin/tools/downgrade-info")
@@ -498,7 +500,8 @@ async def api_download_flash_exe():
     return FileResponse(
         path,
         filename="TNA-OS Flasher.exe",
-        media_type="application/octet-stream"
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "no-store"}
     )
 
 

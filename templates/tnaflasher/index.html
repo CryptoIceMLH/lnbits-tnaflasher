@@ -538,18 +538,23 @@
           </q-btn>
         </div>
 
-        <!-- Current file info -->
-        <div v-if="flasherInfo.exists" class="row items-center q-mb-md q-pa-sm" style="background:rgba(255,255,255,0.04); border-radius:6px; border:1px solid #333;">
-          <q-icon name="description" color="orange" class="q-mr-sm" />
-          <div class="col">
-            <span class="text-weight-medium">TNA-OS Flasher.exe</span>
-            <span class="text-caption text-grey q-ml-sm">${ flasherInfo.size_mb } MB &mdash; ${ formatDate(flasherInfo.modified_at) }</span>
-          </div>
-          <q-btn flat dense icon="delete" color="negative" @click="deleteFlasher">
-            <q-tooltip>Remove from server</q-tooltip>
-          </q-btn>
+        <div v-if="flasherInfo.exists" class="q-mb-md">
+          <q-list bordered separator dense>
+            <q-item>
+              <q-item-section avatar><q-icon name="get_app" color="orange" /></q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-medium">TNA-OS Flasher.exe</q-item-label>
+                <q-item-label caption>${ flasherInfo.size_mb } MB &mdash; ${ formatDate(flasherInfo.modified_at) }</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn flat dense icon="delete" color="negative" @click="deleteFlasher">
+                  <q-tooltip>Remove from server</q-tooltip>
+                </q-btn>
+              </q-item-section>
+            </q-item>
+          </q-list>
         </div>
-        <div v-else-if="flasherInfo.exists === false" class="text-caption text-negative q-mb-md">No flasher binary on disk yet</div>
+        <div v-else-if="flasherInfo.exists === false" class="text-caption text-negative q-mb-sm">No flasher binary on disk yet</div>
 
         <div class="text-caption text-grey q-mb-md">Upload a new compiled flasher — replaces the current one instantly.</div>
         <div class="row q-col-gutter-sm items-end">
@@ -593,17 +598,23 @@
             <q-tooltip>Refresh</q-tooltip>
           </q-btn>
         </div>
-        <div v-if="downgradeInfo.exists" class="row items-center q-mb-md q-pa-sm" style="background:rgba(255,255,255,0.04); border-radius:6px; border:1px solid #333;">
-          <q-icon name="folder_zip" color="primary" class="q-mr-sm" />
-          <div class="col">
-            <span class="text-weight-medium">downgrade.zip</span>
-            <span class="text-caption text-grey q-ml-sm">${ downgradeInfo.size_mb } MB &mdash; ${ formatDate(downgradeInfo.modified_at) }</span>
-          </div>
-          <q-btn flat dense icon="delete" color="negative" @click="deleteDowngrade">
-            <q-tooltip>Remove from server</q-tooltip>
-          </q-btn>
+        <div v-if="downgradeInfo.exists" class="q-mb-md">
+          <q-list bordered separator dense>
+            <q-item>
+              <q-item-section avatar><q-icon name="archive" color="primary" /></q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-medium">downgrade.zip</q-item-label>
+                <q-item-label caption>${ downgradeInfo.size_mb } MB &mdash; ${ formatDate(downgradeInfo.modified_at) }</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn flat dense icon="delete" color="negative" @click="deleteDowngrade">
+                  <q-tooltip>Remove from server</q-tooltip>
+                </q-btn>
+              </q-item-section>
+            </q-item>
+          </q-list>
         </div>
-        <div v-else-if="downgradeInfo.exists === false" class="text-caption text-negative q-mb-md">No downgrade archive on disk yet</div>
+        <div v-else-if="downgradeInfo.exists === false" class="text-caption text-negative q-mb-sm">No downgrade archive on disk yet</div>
         <div class="text-caption text-grey q-mb-md">Bitmain downgrade files served publicly — users download before flashing TNA-OS.</div>
         <div class="row q-col-gutter-sm items-end">
           <div class="col-12 col-sm-6">
