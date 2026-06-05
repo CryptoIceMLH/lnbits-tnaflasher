@@ -100,6 +100,7 @@
       this.blkSz = 512;
       this.capacity = 0;
       this._verifiedMode = null; // set by connectAndVerify()
+      this._debug = opts.debug !== false; // verbose protocol logging (default on while stabilising)
       this.onLog = opts.onLog || (() => {});
       this.onProgress = opts.onProgress || (() => {});
     }
@@ -241,6 +242,12 @@
       if (this.epIn == null || this.epOut == null) {
         throw new Error("Could not locate bulk IN/OUT endpoints");
       }
+      this.log(
+        "USB ready — interface " + this.iface +
+          ", configs=" + dev.configurations.length +
+          ", interfaces=" + cfg.interfaces.length +
+          ", epIn=0x" + this.epIn.toString(16) + " epOut=0x" + this.epOut.toString(16)
+      );
     }
 
     async _close() {
@@ -359,7 +366,8 @@
       packet.set(payload, HEADER_SIZE);
 
       const wr = await this.device.transferOut(this.epOut, packet);
-      if (wr.status !== "ok") throw new Error("command write failed (cmd 0x" + cmd.toString(16) + ")");
+      if (wr.status !== "ok") throw new Error("command write failed (cmd 0x" + cmd.toString(16) + ", status " + wr.status + ")");
+      if (this._debug) this.log("  cmd 0x" + cmd.toString(16) + " sent (" + wr.bytesWritten + "/" + PACKET_SIZE + " bytes), awaiting reply…");
 
       if (expectedRespLen === 0) return null;
 
@@ -616,6 +624,9 @@
           );
         }
         this.log("device is now in loader mode");
+        // Give the loader a moment to be ready for KBURN commands after the
+        // mode switch (the detectMode control-IN can race the loader coming up).
+        await sleep(500);
       } else if (mode !== DEV_UBOOT) {
         throw new Error("unexpected device mode: " + mode + " (is it in BOOT mode?)");
       }
