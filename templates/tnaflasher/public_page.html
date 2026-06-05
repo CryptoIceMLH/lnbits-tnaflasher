@@ -262,8 +262,8 @@
           </div>
         </q-banner>
 
-        <!-- Step 1: Connect Device (WebSerial) -->
-        <q-card v-if="walletValid && devices.length > 0 && !isNoConnectDevice" class="q-mb-md tna-card">
+        <!-- Step 1: Connect Device (WebSerial / ESP) — only once an ESP device is picked -->
+        <q-card v-if="walletValid && devices.length > 0 && selectedDevice && !isNoConnectDevice" class="q-mb-md tna-card">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge color="primary" class="q-mr-sm">1</q-badge>
@@ -339,7 +339,7 @@
               dense-toggle
               label="Windows: one-time driver setup (Zadig)"
               header-class="text-tna-accent"
-              class="q-mb-sm"
+              class="q-mb-md"
             >
               <div class="text-tna-secondary q-pa-sm" style="font-size:0.85rem; line-height:1.6;">
                 On Windows, the browser can only claim the miner if the <strong>WinUSB</strong> driver is bound to
@@ -349,6 +349,24 @@
                 macOS and Linux need no driver step.
               </div>
             </q-expansion-item>
+
+            <!-- MUST-ACKNOWLEDGE checklist — gates the Flash button (shown here, above payment) -->
+            <div class="q-pa-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px;">
+              <div class="text-weight-bold text-tna-accent q-mb-sm">⚠️ Confirm these before you pay — protect your code:</div>
+              <q-checkbox v-model="webusbAckBrowser" dark dense class="text-tna-secondary" style="display:block;"
+                label="I'm using Chrome, Edge, Brave, or Opera on desktop (not Firefox/Safari/mobile)." />
+              <q-checkbox v-model="webusbAckDriver" dark dense class="text-tna-secondary" style="display:block;"
+                label="Windows only: I've bound the WinUSB driver to device 29F1:0230 with Zadig (skip on macOS/Linux)." />
+              <q-checkbox v-model="webusbAckBoot" dark dense class="text-tna-secondary" style="display:block;"
+                label="My Nano 3s is in BOOT mode (recovery button held while plugging in USB) and connected to this PC." />
+              <div v-if="!webusbReady" class="text-tna-muted q-mt-sm" style="font-size:0.82rem;">
+                Tick all three to enable the Flash step after payment. We also re-check the device is live and in
+                BOOT mode <strong>before</strong> your code is used — so a not-ready device never burns it.
+              </div>
+              <div v-else class="q-mt-sm" style="color: var(--accent); font-size:0.82rem;">
+                ✓ Ready — continue to payment below, then Flash.
+              </div>
+            </div>
           </q-card-section>
         </q-card>
 
@@ -559,8 +577,8 @@
           </q-card-section>
         </q-card>
 
-        <!-- Step 4: Flash (WebSerial) -->
-        <q-card v-if="walletValid && devices.length > 0 && !isSSHDevice" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
+        <!-- Step 4: Flash (WebSerial / ESP only) -->
+        <q-card v-if="walletValid && devices.length > 0 && !isNoConnectDevice" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
@@ -683,24 +701,15 @@
               <span class="text-h6 text-tna-primary">Flash Your Nano 3s</span>
             </div>
 
-            <!-- Pre-flash MUST-ACKNOWLEDGE checklist (gates the Flash button) -->
-            <div v-if="!flashing && !flashComplete" class="q-mb-md q-pa-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px;">
-              <div class="text-weight-bold text-tna-accent q-mb-sm">⚠️ Confirm before flashing — protect your paid code:</div>
-              <div class="text-tna-secondary q-mb-sm" style="font-size:0.86rem;">
-                Tick all three so we don't start a flash your hardware isn't ready for. We verify the
-                device is actually responding <strong>before</strong> using your code — but please make sure:
+            <!-- Reminder: prerequisites were confirmed in step 1; Flash is enabled once paid + checklist done -->
+            <div v-if="!flashing && !flashComplete && !webusbReady" class="q-mb-md q-pa-md" style="background: rgba(255,107,107,0.1); border: 1px solid #ff6b6b; border-radius: 8px;">
+              <div class="text-tna-secondary" style="font-size:0.88rem;">
+                Finish the <strong class="text-tna-accent">confirmation checklist in step 1</strong> to enable flashing
+                (browser, driver, and BOOT-mode checks).
               </div>
-              <q-checkbox v-model="webusbAckBrowser" dark dense class="text-tna-secondary" style="display:block;"
-                label="I'm using Chrome, Edge, Brave, or Opera on desktop (not Firefox/Safari/mobile)." />
-              <q-checkbox v-model="webusbAckDriver" dark dense class="text-tna-secondary" style="display:block;"
-                label="Windows only: I've bound the WinUSB driver to device 29F1:0230 with Zadig (skip on macOS/Linux)." />
-              <q-checkbox v-model="webusbAckBoot" dark dense class="text-tna-secondary" style="display:block;"
-                label="My Nano 3s is in BOOT mode (recovery button held while plugging in USB) and connected to this PC." />
-
-              <div v-if="!isWebUSBSupported" class="q-mt-sm" style="color:#ff6b6b; font-size:0.85rem;">
-                This browser does not support WebUSB — switch to Chrome/Edge/Brave/Opera to continue.
-              </div>
-              <div class="text-tna-muted q-mt-sm" style="font-size:0.82rem;">
+            </div>
+            <div v-if="!flashing && !flashComplete && webusbReady" class="q-mb-md q-pa-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px;">
+              <div class="text-tna-secondary" style="font-size:0.86rem;">
                 When you click Flash, your browser asks you to pick the <code>29F1:0230</code> device. We check it's
                 live and in BOOT mode first; only then is your code used. <strong class="text-tna-accent">Do not unplug</strong>
                 during flashing — the miner reboots into TNA-OS on its own.
