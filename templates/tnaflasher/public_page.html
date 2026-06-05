@@ -316,6 +316,17 @@
               then click Flash after payment.
             </div>
 
+            <!-- Heads-up: the two-prompt flow is normal -->
+            <div class="q-pa-md q-mb-md" style="background: rgba(57,255,20,0.08); border: 1px solid rgba(57,255,20,0.4); border-radius: 8px;">
+              <div class="text-weight-bold q-mb-xs" style="color:#39ff14;">ℹ️ Expect TWO device pop-ups — this is normal</div>
+              <div class="text-tna-secondary" style="font-size:0.88rem; line-height:1.6;">
+                Your browser will ask you to <strong>pick the <code>29F1:0230</code> device twice</strong>:
+                once when you click Flash, and <strong>again a few seconds later</strong> after the miner
+                switches into flashing mode and reconnects. <strong class="text-tna-accent">Both are expected</strong> —
+                just select the same device each time and the flash carries on. It's not an error.
+              </div>
+            </div>
+
             <!-- BOOT-mode steps -->
             <div class="q-pa-md q-mb-md" style="background: rgba(247,147,26,0.08); border: 1px solid rgba(247,147,26,0.4); border-radius: 8px;">
               <div class="text-subtitle2 text-tna-accent q-mb-sm">Put the Nano 3s into BOOT mode:</div>
@@ -749,22 +760,35 @@
 
             <!-- Flashing progress -->
             <div v-if="flashing">
-              <div class="text-center text-caption text-tna-accent q-mb-xs" style="text-transform: uppercase; letter-spacing: 1px;">
-                ${ webusbPhaseLabel }
-                <span v-if="webusbPartsTotal"> &middot; ${ webusbPartName } (${ webusbPartsDone }/${ webusbPartsTotal })</span>
-              </div>
-              <q-linear-progress
-                :value="flashProgress / 100"
-                size="25px"
-                color="orange"
-                class="q-mb-md"
-              >
-                <div class="absolute-full flex flex-center">
-                  <q-badge color="dark" text-color="orange" :label="flashProgress + '%'" />
+              <!-- Expected mid-flash step: re-select the device after it switches to loader mode -->
+              <div v-if="webusbNeedsRepick" class="q-mb-md q-pa-md text-center" style="background: rgba(247,147,26,0.12); border: 1px solid var(--accent); border-radius: 8px;">
+                <div class="text-weight-bold text-tna-accent q-mb-xs">One more tap — this is normal ✅</div>
+                <div class="text-tna-secondary q-mb-md" style="font-size:0.88rem; line-height:1.6;">
+                  The miner just switched into flashing mode and reconnected as a new USB device.
+                  Click below and <strong>pick the same <code>29F1:0230</code> device again</strong> — the flash continues automatically.
                 </div>
-              </q-linear-progress>
-              <div class="text-center text-caption text-tna-secondary">${ flashStatus }</div>
-              <div class="text-center text-caption text-tna-muted q-mt-xs">Keep the miner plugged in — do not refresh.</div>
+                <q-btn color="primary" size="lg" label="Continue — Select Device" @click="webusbRepick" />
+                <div class="text-tna-muted q-mt-sm" style="font-size:0.8rem;">Your code has already been verified — you won't lose it.</div>
+              </div>
+
+              <template v-else>
+                <div class="text-center text-caption text-tna-accent q-mb-xs" style="text-transform: uppercase; letter-spacing: 1px;">
+                  ${ webusbPhaseLabel }
+                  <span v-if="webusbPartsTotal"> &middot; ${ webusbPartName } (${ webusbPartsDone }/${ webusbPartsTotal })</span>
+                </div>
+                <q-linear-progress
+                  :value="flashProgress / 100"
+                  size="25px"
+                  color="orange"
+                  class="q-mb-md"
+                >
+                  <div class="absolute-full flex flex-center">
+                    <q-badge color="dark" text-color="orange" :label="flashProgress + '%'" />
+                  </div>
+                </q-linear-progress>
+                <div class="text-center text-caption text-tna-secondary">${ flashStatus }</div>
+                <div class="text-center text-caption text-tna-muted q-mt-xs">Keep the miner plugged in — do not refresh.</div>
+              </template>
             </div>
 
             <!-- Flash complete -->
@@ -939,6 +963,8 @@
           webusbAckDriver: false,   // Windows driver bound (or not on Windows)
           webusbAckBoot: false,     // miner is in BOOT mode + USB connected
           webusbDriverHelp: false,  // show inline Zadig help after a claim failure
+          webusbNeedsRepick: false, // loader-mode device must be re-selected (user gesture)
+          _webusbRepickResolve: null, // resolver for the re-pick promise
 
           // Notifications
           notification: null
@@ -1395,6 +1421,8 @@
           this.webusbPartsDone = 0
           this.webusbPartsTotal = 0
           this.webusbDriverHelp = false
+          this.webusbNeedsRepick = false
+          this._webusbRepickResolve = null
           this.webusbFlasher = flasher
           this.flashStatus = 'Checking your device…'
           try {
@@ -1444,7 +1472,16 @@
             const loaderBytes = new Uint8Array(await ldResp.arrayBuffer())
 
             this.flashStatus = 'Flashing — do not unplug…'
-            await flasher.flashImage(kdimgBuffer, loaderBytes)
+            await flasher.flashImage(kdimgBuffer, loaderBytes, {
+              // Called if the loader-mode device can't be auto-reacquired —
+              // shows a button, waits for the user to click + re-pick the device
+              // (a fresh user gesture, which WebUSB requires for requestDevice).
+              repick: () => {
+                this.flashStatus = 'Almost there — re-select your device to continue'
+                this.webusbNeedsRepick = true
+                return new Promise((resolve) => { this._webusbRepickResolve = resolve })
+              }
+            })
 
             this.flashProgress = 100
             this.flashComplete = true
@@ -1483,6 +1520,33 @@
             const within = p.total ? (p.current / p.total) : 0
             const frac = (p.partsDone * perPart) + (within * perPart)
             this.flashProgress = 25 + Math.round(frac * 75)
+          }
+        },
+
+        // Step in the normal flash: the miner reboots into loader mode and
+        // re-appears as a NEW USB device, so the browser needs a fresh pick.
+        // This is expected on every flash — the user clicks "Continue", picks
+        // the device again, and the flash carries on. (WebUSB requires the
+        // requestDevice() call to come from a user gesture, hence the button.)
+        async webusbRepick() {
+          const flasher = this.webusbFlasher
+          this.webusbNeedsRepick = false
+          if (!flasher) return
+          let dev = null
+          try {
+            dev = await flasher.requestDevice() // shows the 2nd device prompt
+          } catch (e) {
+            // User dismissed the picker — re-show the Continue button so they
+            // can try again; the flash is still paused waiting on the promise.
+            this.webusbNeedsRepick = true
+            this.notify('warning', 'Select the device to continue the flash.')
+            return
+          }
+          // Hand the picked device back to the paused flashImage() flow.
+          if (this._webusbRepickResolve) {
+            const resolve = this._webusbRepickResolve
+            this._webusbRepickResolve = null
+            resolve(dev)
           }
         },
 
@@ -1623,6 +1687,8 @@
           this.webusbAckDriver = false
           this.webusbAckBoot = false
           this.webusbDriverHelp = false
+          this.webusbNeedsRepick = false
+          this._webusbRepickResolve = null
         }
       },
 

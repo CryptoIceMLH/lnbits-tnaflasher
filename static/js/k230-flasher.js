@@ -516,8 +516,14 @@
      * connectAndVerify() has succeeded.
      * @param {ArrayBuffer} kdimgBuffer  the raw .kdimg bytes
      * @param {Uint8Array}  loaderBytes  loader_spi_nand.bin
+     * @param {Object}      opts
+     * @param {Function}    opts.repick  async () => USBDevice — called when the
+     *        loader-mode device can't be auto-reacquired (WebUSB only returns
+     *        devices the page was granted; the re-enumerated loader instance is
+     *        a NEW device needing its own permission). Must run from a user
+     *        gesture (a button) and return the device from navigator.usb.requestDevice().
      */
-    async flashImage(kdimgBuffer, loaderBytes) {
+    async flashImage(kdimgBuffer, loaderBytes, opts = {}) {
       const KP = global.KDImgParser;
       if (!KP) throw new Error("kdimg-parser.js not loaded");
       if (!this.device) throw new Error("device not connected — run connectAndVerify() first");
@@ -536,20 +542,44 @@
         await this.uploadLoader(loaderBytes);
         // Re-enumerate: after boot_from, the BROM handle is dead. The device
         // drops USB, reboots into the loader, and re-appears (same 29F1:0230).
-        // Close our stale handle, then poll for the fresh instance + open it.
+        // Close our stale handle, then try to auto-reacquire it.
         try { await this._close(); } catch (_) {}
         this.device = null;
         this.log("waiting for the device to switch into loader mode…");
-        const redev = await this._waitForReenumeratedDevice();
+        let redev = await this._waitForReenumeratedDevice();
+
+        // Auto-reacquire fails when the loader-mode device is a NEW USB instance
+        // the page wasn't granted (the common case on Windows — the WebUSB
+        // permission was for the BROM instance only, so getDevices() can't see
+        // the loader instance). Fall back to a user-gesture re-pick.
+        if (!redev && typeof opts.repick === "function") {
+          this.log("loader-mode device needs to be re-selected — prompting…");
+          let picked = null;
+          try {
+            picked = await opts.repick();
+          } catch (e) {
+            picked = null;
+          }
+          if (picked) {
+            this.device = picked;
+            try {
+              await this._open();
+              redev = picked;
+            } catch (e) {
+              this.device = null;
+              throw new Error("Selected the device but couldn't open it: " + (e.message || e));
+            }
+          }
+        }
+
         if (!redev) {
           throw new Error(
             "Device didn't come back in loader mode after the loader upload. " +
-              "Re-enter BOOT mode (hold recovery + replug), then try again. " +
-              "If it persists, the WinUSB driver may need to be re-bound to the " +
-              "loader-mode device in Zadig as well."
+              "When prompted, pick the device again (it re-appears with a new USB " +
+              "identity). On Windows, also bind WinUSB to the loader-mode device in Zadig if needed."
           );
         }
-        // _waitForReenumeratedDevice() already opened + claimed it.
+        // device is now open + claimed (either auto-reacquired or re-picked).
         mode = await this.detectMode();
         if (mode !== DEV_UBOOT) {
           throw new Error(
