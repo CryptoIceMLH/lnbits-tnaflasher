@@ -1534,7 +1534,9 @@
           if (!flasher) return
           let dev = null
           try {
-            dev = await flasher.requestDevice() // shows the 2nd device prompt
+            // Loader mode is a DIFFERENT USB device (not 29F1:0230) — show all
+            // devices unfiltered so the user can pick it.
+            dev = await flasher.requestDevice({ anyDevice: true })
           } catch (e) {
             // User dismissed the picker — re-show the Continue button so they
             // can try again; the flash is still paused waiting on the promise.

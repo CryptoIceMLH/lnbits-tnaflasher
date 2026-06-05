@@ -115,11 +115,20 @@
       return typeof navigator !== "undefined" && !!navigator.usb;
     }
 
-    /** Prompt the user to pick the K230 (must be called from a user gesture). */
-    async requestDevice() {
-      this.device = await navigator.usb.requestDevice({
-        filters: [{ vendorId: K230_VID, productId: K230_PID }],
-      });
+    /** Prompt the user to pick the K230 (must be called from a user gesture).
+     *  In BROM mode it's 29F1:0230. The LOADER mode re-enumerates as a DIFFERENT
+     *  USB device (different name/VID/PID — e.g. a download/DFU gadget), so for
+     *  the re-pick we pass {anyDevice:true} to show all devices unfiltered. */
+    async requestDevice(opts = {}) {
+      const req = opts.anyDevice ? { filters: [] } : { filters: [{ vendorId: K230_VID, productId: K230_PID }] };
+      this.device = await navigator.usb.requestDevice(req);
+      const d = this.device;
+      this.log(
+        "selected device: " +
+          (d.productName || "(unnamed)") + " — VID:PID " +
+          d.vendorId.toString(16).padStart(4, "0") + ":" +
+          d.productId.toString(16).padStart(4, "0")
+      );
       return this.device;
     }
 
@@ -243,11 +252,22 @@
         throw new Error("Could not locate bulk IN/OUT endpoints");
       }
       this.log(
-        "USB ready — interface " + this.iface +
+        "USB ready — claimed interface " + this.iface +
           ", configs=" + dev.configurations.length +
           ", interfaces=" + cfg.interfaces.length +
           ", epIn=0x" + this.epIn.toString(16) + " epOut=0x" + this.epOut.toString(16)
       );
+      if (this._debug) {
+        // Dump the full interface/endpoint map of the loader device so we can
+        // see exactly what it exposes (helps when loader != BROM layout).
+        for (const iface of cfg.interfaces) {
+          const a = iface.alternate;
+          const eps = a.endpoints
+            .map((e) => e.direction + "/" + e.type + "/n" + e.endpointNumber + "/mp" + e.packetSize)
+            .join(", ");
+          this.log("  iface " + iface.interfaceNumber + " class=" + a.interfaceClass + " eps[" + eps + "]");
+        }
+      }
     }
 
     async _close() {
