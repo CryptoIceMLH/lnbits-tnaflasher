@@ -857,9 +857,10 @@
     window.ESPLoader = ESPLoader;
     window.Transport = Transport;
   </script>
-  <!-- Canaan K230 (Nano 3s) WebUSB flasher — kdimg parser must load first -->
-  <script src="/tnaflasher/static/js/kdimg-parser.js"></script>
-  <script src="/tnaflasher/static/js/k230-flasher.js"></script>
+  <!-- Canaan K230 (Nano 3s) WebUSB flasher — kdimg parser must load first.
+       ?v= cache-busts per release so updated JS isn't served stale. -->
+  <script src="/tnaflasher/static/js/kdimg-parser.js?v={{ cache_bust }}"></script>
+  <script src="/tnaflasher/static/js/k230-flasher.js?v={{ cache_bust }}"></script>
   <script>
     const WALLET_ID = '{{ wallet_id }}'
     const API_BASE = window.location.origin
@@ -1534,9 +1535,8 @@
           if (!flasher) return
           let dev = null
           try {
-            // Loader mode is a DIFFERENT USB device (not 29F1:0230) — show all
-            // devices unfiltered so the user can pick it.
-            dev = await flasher.requestDevice({ anyDevice: true })
+            // Loader mode is the same 29F1:0230 — filtered picker shows only the miner.
+            dev = await flasher.requestDevice()
           } catch (e) {
             // User dismissed the picker — re-show the Continue button so they
             // can try again; the flash is still paused waiting on the promise.

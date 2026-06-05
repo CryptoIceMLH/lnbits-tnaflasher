@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 from lnbits.core.models import User
@@ -7,6 +8,16 @@ from pathlib import Path
 from . import tnaflasher_renderer
 
 tnaflasher_generic_router = APIRouter()
+
+
+def _ext_version() -> str:
+    """Current extension version from config.json — used to cache-bust static
+    assets (JS) on each release so browsers / Umbrel nginx don't serve stale files."""
+    try:
+        cfg = json.loads((Path(__file__).parent / "config.json").read_text())
+        return str(cfg.get("version", "0"))
+    except Exception:
+        return "0"
 
 
 @tnaflasher_generic_router.get("/", response_class=HTMLResponse)
@@ -57,6 +68,9 @@ async def public_page(req: Request, wallet_id: str):
     html_content = template_path.read_text()
     # Replace Jinja2 variable with actual wallet_id
     html_content = html_content.replace("{{ wallet_id }}", wallet_id)
+    # Cache-bust static assets (JS) per release so updates aren't served stale
+    # by the browser / Umbrel nginx.
+    html_content = html_content.replace("{{ cache_bust }}", _ext_version())
     return HTMLResponse(content=html_content)
 
 

@@ -117,12 +117,13 @@
     }
 
     /** Prompt the user to pick the K230 (must be called from a user gesture).
-     *  In BROM mode it's 29F1:0230. The LOADER mode re-enumerates as a DIFFERENT
-     *  USB device (different name/VID/PID — e.g. a download/DFU gadget), so for
-     *  the re-pick we pass {anyDevice:true} to show all devices unfiltered. */
-    async requestDevice(opts = {}) {
-      const req = opts.anyDevice ? { filters: [] } : { filters: [{ vendorId: K230_VID, productId: K230_PID }] };
-      this.device = await navigator.usb.requestDevice(req);
+     *  Both BROM and LOADER ("USB download gadget") modes enumerate as the SAME
+     *  29F1:0230 (confirmed on hardware), so we always filter to that — the
+     *  picker shows only the miner, never the user's mouse/mic/etc. */
+    async requestDevice() {
+      this.device = await navigator.usb.requestDevice({
+        filters: [{ vendorId: K230_VID, productId: K230_PID }],
+      });
       const d = this.device;
       this.log(
         "selected device: " +
