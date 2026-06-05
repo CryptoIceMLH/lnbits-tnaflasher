@@ -538,6 +538,16 @@
     async writeImage(data, offset, onChunk) {
       await this._writeStart(offset, data.length);
       await this._writeChunks(data, onChunk);
+      // After the data stream the device sends a completion status ("WRITE DONE"
+      // in the vendor log). We MUST read it, or it stays in the IN buffer and the
+      // next command picks it up as a stray 0x8000 reply (cmd-mismatch). The
+      // Python ref let its NOP drain-read swallow this; we read it explicitly.
+      try {
+        await this._transferInTimeout(this.epInPacketSize, 60000);
+      } catch (e) {
+        // No completion packet within timeout — proceed; the next NOP will cope.
+        this.log("  (no write-done packet read; continuing)");
+      }
     }
 
     /** reboot (0x01): NOP, then <Q> = REBOOT_MARK, no response. Device drops USB. */
