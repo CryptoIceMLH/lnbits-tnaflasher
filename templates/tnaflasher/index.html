@@ -208,7 +208,7 @@
           <div class="col-12 col-sm-3">
             <q-select
               v-model="newPromoDeviceType"
-              :options="[{label:'Both',value:'both'},{label:'USB Only',value:'webserial'},{label:'SSH Only',value:'ssh'}]"
+              :options="[{label:'All',value:'both'},{label:'WebSerial Only',value:'webserial'},{label:'SSH Only',value:'ssh'},{label:'WebUSB Only',value:'webusb'}]"
               label="Device Type"
               outlined
               dense
@@ -298,7 +298,7 @@
           <div class="col-auto">
             <q-select
               v-model="newMinerFlashMethod"
-              :options="[{label: 'WebSerial (USB)', value: 'webserial'}, {label: 'SSH (Network)', value: 'ssh'}]"
+              :options="[{label: 'WebSerial (ESP32)', value: 'webserial'}, {label: 'SSH (ASIC/Network)', value: 'ssh'}, {label: 'WebUSB (Canaan K230)', value: 'webusb'}]"
               label="Flash Method"
               outlined
               dense
@@ -329,8 +329,8 @@
             <q-item-section>
               <q-item-label class="text-weight-bold">
                 ${ miner.name }
-                <q-badge :color="miner.flash_method === 'ssh' ? 'blue' : 'orange'" class="q-ml-sm">
-                  ${ miner.flash_method === 'ssh' ? 'SSH' : 'USB' }
+                <q-badge :color="minerMethodBadge(miner.flash_method).color" class="q-ml-sm">
+                  ${ minerMethodBadge(miner.flash_method).label }
                 </q-badge>
               </q-item-label>
               <q-item-label caption>ID: ${ miner.id.substring(0, 8) }...</q-item-label>
@@ -452,10 +452,10 @@
                   <div class="col-12 col-sm-3">
                     <q-file
                       v-model="uploadData[miner.id].file"
-                      :label="miner.flash_method === 'ssh' ? 'Select .tar.gz file' : 'Select .bin file'"
+                      :label="firmwareFileLabel(miner.flash_method)"
                       outlined
                       dense
-                      :accept="miner.flash_method === 'ssh' ? '.tar.gz,.tgz' : '.bin'"
+                      :accept="firmwareFileAccept(miner.flash_method)"
                     >
                       <template v-slot:prepend>
                         <q-icon name="attach_file" />
@@ -940,6 +940,25 @@
     methods: {
       formatSats(sats) {
         return new Intl.NumberFormat().format(sats)
+      },
+
+      // Flash-method display + per-method firmware file rules (webserial/ssh/webusb)
+      minerMethodBadge(method) {
+        if (method === 'ssh') return { color: 'blue', label: 'SSH' }
+        if (method === 'webusb') return { color: 'purple', label: 'WebUSB' }
+        return { color: 'orange', label: 'WebSerial' }
+      },
+
+      firmwareFileLabel(method) {
+        if (method === 'ssh') return 'Select .tar.gz file'
+        if (method === 'webusb') return 'Select .kdimg file'
+        return 'Select .bin file'
+      },
+
+      firmwareFileAccept(method) {
+        if (method === 'ssh') return '.tar.gz,.tgz'
+        if (method === 'webusb') return '.kdimg'
+        return '.bin'
       },
 
       formatFileSize(bytes) {

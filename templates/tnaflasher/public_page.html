@@ -263,7 +263,7 @@
         </q-banner>
 
         <!-- Step 1: Connect Device (WebSerial) -->
-        <q-card v-if="walletValid && devices.length > 0 && !isSSHDevice" class="q-mb-md tna-card">
+        <q-card v-if="walletValid && devices.length > 0 && !isNoConnectDevice" class="q-mb-md tna-card">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge color="primary" class="q-mr-sm">1</q-badge>
@@ -303,11 +303,60 @@
           </q-card-section>
         </q-card>
 
-        <!-- Step 2: Select Device & Firmware -->
-        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !isSSHDevice && !connected }">
+        <!-- Step 1: Canaan Nano 3s (WebUSB / K230) - in-browser, BOOT mode -->
+        <q-card v-if="walletValid && devices.length > 0 && isWebUSBDevice" class="q-mb-md tna-card">
           <q-card-section>
             <div class="row items-center q-mb-md">
-              <q-badge :color="(isSSHDevice || connected) ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
+              <q-badge color="primary" class="q-mr-sm">1</q-badge>
+              <span class="text-h6 text-tna-primary">Canaan Nano 3s (USB Flash)</span>
+            </div>
+            <div class="text-tna-secondary q-mb-md">
+              This device flashes <strong class="text-tna-accent">directly in your browser</strong> over USB —
+              no download, no tool to run. You'll put the miner into <strong class="text-tna-accent">BOOT mode</strong>,
+              then click Flash after payment.
+            </div>
+
+            <!-- BOOT-mode steps -->
+            <div class="q-pa-md q-mb-md" style="background: rgba(247,147,26,0.08); border: 1px solid rgba(247,147,26,0.4); border-radius: 8px;">
+              <div class="text-subtitle2 text-tna-accent q-mb-sm">Put the Nano 3s into BOOT mode:</div>
+              <ol style="margin: 0; padding-left: 1.4em; color: var(--text-secondary); line-height: 1.8; font-size: 0.9rem;">
+                <li>Power <strong>off</strong> the Nano 3s.</li>
+                <li>Hold the small <strong class="text-tna-accent">recovery / BOOT button</strong> next to the USB-C port.</li>
+                <li>While holding it, plug in the <strong class="text-tna-accent">double-A USB cable</strong> (USB-A both ends) to your PC.</li>
+                <li>Power on, then <strong>release the button after ~2 seconds</strong>.</li>
+                <li>The miner now shows up as a USB device <code style="color:var(--accent);">29F1:0230</code>.</li>
+              </ol>
+            </div>
+
+            <!-- Browser support / Windows driver notice -->
+            <div v-if="!isWebUSBSupported" class="q-pa-md q-mb-md" style="background: rgba(255,107,107,0.1); border: 1px solid #ff6b6b; border-radius: 8px;">
+              <div class="text-weight-bold" style="color:#ff6b6b;">WebUSB not available in this browser</div>
+              <div class="text-tna-secondary" style="font-size:0.88rem;">Use Chrome, Edge, Brave, or Opera on desktop. Firefox/Safari do not support WebUSB.</div>
+            </div>
+            <q-expansion-item
+              v-else
+              dense
+              dense-toggle
+              label="Windows: one-time driver setup (Zadig)"
+              header-class="text-tna-accent"
+              class="q-mb-sm"
+            >
+              <div class="text-tna-secondary q-pa-sm" style="font-size:0.85rem; line-height:1.6;">
+                On Windows, the browser can only claim the miner if the <strong>WinUSB</strong> driver is bound to
+                <code style="color:var(--accent);">29F1:0230</code>. If the Flash step can't find the device:
+                install <a href="https://zadig.akeo.ie/" target="_blank" class="text-tna-accent">Zadig</a>,
+                select the <code>29F1:0230</code> device, choose <strong>WinUSB</strong>, and click Replace/Install Driver — once.
+                macOS and Linux need no driver step.
+              </div>
+            </q-expansion-item>
+          </q-card-section>
+        </q-card>
+
+        <!-- Step 2: Select Device & Firmware -->
+        <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !isNoConnectDevice && !connected }">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge :color="(isNoConnectDevice || connected) ? 'primary' : 'grey'" class="q-mr-sm">2</q-badge>
               <span class="text-h6 text-tna-primary">Select Firmware</span>
             </div>
 
@@ -342,7 +391,7 @@
                   emit-value
                   map-options
                   dropdown-icon="none"
-                  :disable="(!isSSHDevice && !connected) || !selectedDevice || paid"
+                  :disable="(!isNoConnectDevice && !connected) || !selectedDevice || paid"
                   @update:model-value="onVersionChange"
                 >
                   <template v-slot:append>
@@ -359,7 +408,7 @@
                 </div>
               </div>
 
-              <div v-if="!isSSHDevice" class="col-12">
+              <div v-if="!isNoConnectDevice" class="col-12">
                 <q-checkbox
                   v-model="keepConfig"
                   label="Keep existing configuration (WiFi, pool settings, etc.)"
@@ -626,6 +675,104 @@
           </q-card-section>
         </q-card>
 
+        <!-- Step 4: Flash (WebUSB / Canaan K230) -->
+        <q-card v-if="walletValid && devices.length > 0 && isWebUSBDevice" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
+              <span class="text-h6 text-tna-primary">Flash Your Nano 3s</span>
+            </div>
+
+            <!-- Pre-flash MUST-ACKNOWLEDGE checklist (gates the Flash button) -->
+            <div v-if="!flashing && !flashComplete" class="q-mb-md q-pa-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px;">
+              <div class="text-weight-bold text-tna-accent q-mb-sm">⚠️ Confirm before flashing — protect your paid code:</div>
+              <div class="text-tna-secondary q-mb-sm" style="font-size:0.86rem;">
+                Tick all three so we don't start a flash your hardware isn't ready for. We verify the
+                device is actually responding <strong>before</strong> using your code — but please make sure:
+              </div>
+              <q-checkbox v-model="webusbAckBrowser" dark dense class="text-tna-secondary" style="display:block;"
+                label="I'm using Chrome, Edge, Brave, or Opera on desktop (not Firefox/Safari/mobile)." />
+              <q-checkbox v-model="webusbAckDriver" dark dense class="text-tna-secondary" style="display:block;"
+                label="Windows only: I've bound the WinUSB driver to device 29F1:0230 with Zadig (skip on macOS/Linux)." />
+              <q-checkbox v-model="webusbAckBoot" dark dense class="text-tna-secondary" style="display:block;"
+                label="My Nano 3s is in BOOT mode (recovery button held while plugging in USB) and connected to this PC." />
+
+              <div v-if="!isWebUSBSupported" class="q-mt-sm" style="color:#ff6b6b; font-size:0.85rem;">
+                This browser does not support WebUSB — switch to Chrome/Edge/Brave/Opera to continue.
+              </div>
+              <div class="text-tna-muted q-mt-sm" style="font-size:0.82rem;">
+                When you click Flash, your browser asks you to pick the <code>29F1:0230</code> device. We check it's
+                live and in BOOT mode first; only then is your code used. <strong class="text-tna-accent">Do not unplug</strong>
+                during flashing — the miner reboots into TNA-OS on its own.
+              </div>
+            </div>
+
+            <!-- Inline driver help — shown only after a claim/access failure -->
+            <div v-if="webusbDriverHelp && !flashing && !flashComplete" class="q-mb-md q-pa-md" style="background: rgba(255,107,107,0.12); border: 1px solid #ff6b6b; border-radius: 8px;">
+              <div class="text-weight-bold q-mb-sm" style="color:#ff6b6b;">Couldn't access the device — driver not ready</div>
+              <div class="text-tna-secondary q-mb-sm" style="font-size:0.88rem; line-height:1.6;">
+                Your browser saw the device but couldn't take control of it. On <strong>Windows</strong> this means the
+                <strong>WinUSB</strong> driver isn't bound to it yet. Fix it once with Zadig:
+              </div>
+              <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height:1.8; font-size:0.88rem;">
+                <li>Download &amp; run <a href="https://zadig.akeo.ie/" target="_blank" class="text-tna-accent">Zadig</a> (keep the miner in BOOT mode, plugged in).</li>
+                <li>In Zadig: <strong>Options → List All Devices</strong>, then select the <code style="color:var(--accent);">29F1:0230</code> device.</li>
+                <li>Set the driver to <strong>WinUSB</strong> and click <strong>Replace Driver</strong> / <strong>Install Driver</strong>.</li>
+                <li>Come back here and click <strong class="text-tna-accent">Flash Now</strong> again.</li>
+              </ol>
+              <div class="text-tna-muted q-mt-sm" style="font-size:0.82rem;">
+                On macOS/Linux this usually means the device wasn't actually in BOOT mode — re-do the BOOT-mode steps above.
+                Your payment code has <strong>not</strong> been used.
+              </div>
+            </div>
+
+            <div v-if="!flashing && !flashComplete" class="text-center">
+              <q-btn
+                color="primary"
+                label="Flash Now"
+                @click="startWebUSBFlash"
+                :disable="!paid || !flashToken || !webusbReady"
+                size="lg"
+              >
+                <q-tooltip v-if="!webusbReady">Confirm all three checklist items first</q-tooltip>
+              </q-btn>
+            </div>
+
+            <!-- Flashing progress -->
+            <div v-if="flashing">
+              <div class="text-center text-caption text-tna-accent q-mb-xs" style="text-transform: uppercase; letter-spacing: 1px;">
+                ${ webusbPhaseLabel }
+                <span v-if="webusbPartsTotal"> &middot; ${ webusbPartName } (${ webusbPartsDone }/${ webusbPartsTotal })</span>
+              </div>
+              <q-linear-progress
+                :value="flashProgress / 100"
+                size="25px"
+                color="orange"
+                class="q-mb-md"
+              >
+                <div class="absolute-full flex flex-center">
+                  <q-badge color="dark" text-color="orange" :label="flashProgress + '%'" />
+                </div>
+              </q-linear-progress>
+              <div class="text-center text-caption text-tna-secondary">${ flashStatus }</div>
+              <div class="text-center text-caption text-tna-muted q-mt-xs">Keep the miner plugged in — do not refresh.</div>
+            </div>
+
+            <!-- Flash complete -->
+            <div v-if="flashComplete" class="text-center">
+              <div class="status-connected" style="font-size: 3em;">✓</div>
+              <div class="text-h6 status-connected q-mt-sm">Flash Complete!</div>
+              <p class="text-tna-muted q-mt-sm">Your Nano 3s is rebooting into TNA-OS.</p>
+              <q-btn flat label="Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
+            </div>
+
+            <!-- Not paid placeholder -->
+            <div v-if="!paid" class="text-center text-tna-muted q-pa-md">
+              Complete payment above to enable flashing.
+            </div>
+          </q-card-section>
+        </q-card>
+
         <!-- Terminal Output -->
         <q-card v-if="walletValid && terminalOutput.length > 0" class="tna-card">
           <q-card-section>
@@ -677,6 +824,9 @@
     window.ESPLoader = ESPLoader;
     window.Transport = Transport;
   </script>
+  <!-- Canaan K230 (Nano 3s) WebUSB flasher — kdimg parser must load first -->
+  <script src="/tnaflasher/static/js/kdimg-parser.js"></script>
+  <script src="/tnaflasher/static/js/k230-flasher.js"></script>
   <script>
     const WALLET_ID = '{{ wallet_id }}'
     const API_BASE = window.location.origin
@@ -767,6 +917,19 @@
           // Tool file versions (mtime-based cache busting)
           flasherMtime: 0,
           downgradeMtime: 0,
+          loaderMtime: 0,
+
+          // WebUSB (Canaan K230 / Nano 3s) flash state
+          webusbFlasher: null,      // K230Flasher instance during a flash
+          webusbPhase: '',          // 'loader' | 'erase' | 'write'
+          webusbPartName: '',
+          webusbPartsDone: 0,
+          webusbPartsTotal: 0,
+          // Must-acknowledge prerequisites (all must be true before flashing)
+          webusbAckBrowser: false,  // using a supported browser
+          webusbAckDriver: false,   // Windows driver bound (or not on Windows)
+          webusbAckBoot: false,     // miner is in BOOT mode + USB connected
+          webusbDriverHelp: false,  // show inline Zadig help after a claim failure
 
           // Notifications
           notification: null
@@ -832,6 +995,47 @@
           return this.selectedDeviceInfo && this.selectedDeviceInfo.flash_method === 'ssh'
         },
 
+        isWebUSBDevice() {
+          return this.selectedDeviceInfo && this.selectedDeviceInfo.flash_method === 'webusb'
+        },
+
+        // True for any method that needs no in-browser serial connection before
+        // firmware selection (SSH = network, WebUSB = device picked at flash time).
+        isNoConnectDevice() {
+          return this.isSSHDevice || this.isWebUSBDevice
+        },
+
+        kdimgUrl() {
+          // Token-gated whole-file .kdimg download (served byte-for-byte).
+          if (!this.flashToken || !this.selectedDevice || !this.selectedVersion) return ''
+          return window.location.origin + '/tnaflasher/api/v1/firmware/'
+            + encodeURIComponent(this.selectedDevice) + '/'
+            + encodeURIComponent(this.selectedVersion)
+            + '?token=' + encodeURIComponent(this.flashToken)
+        },
+
+        k230LoaderUrl() {
+          const base = window.location.origin + '/tnaflasher/static/loaders/loader_spi_nand.bin'
+          return this.loaderMtime ? base + '?v=' + this.loaderMtime : base
+        },
+
+        isWebUSBSupported() {
+          return !!(navigator && navigator.usb)
+        },
+
+        webusbPhaseLabel() {
+          const map = { loader: 'Preparing device', erase: 'Erasing', write: 'Writing firmware' }
+          return map[this.webusbPhase] || 'Flashing'
+        },
+
+        // All prerequisites acknowledged AND browser actually supports WebUSB.
+        webusbReady() {
+          return this.isWebUSBSupported
+            && this.webusbAckBrowser
+            && this.webusbAckDriver
+            && this.webusbAckBoot
+        },
+
         flashToolUrl() {
           return window.location.origin + '/tnaflasher/api/v1/tools/tna-flash.py'
         },
@@ -847,35 +1051,43 @@
         }
       },
 
-      async created() {
-        try {
-          const res = await fetch('/tnaflasher/api/v1/feature-flags');
-          const flags = await res.json();
-          this.showAdvanced = flags.feature_advanced_page !== false;
-        } catch (err) {
-          console.error('Failed to load feature flags:', err);
-          this.showAdvanced = true;
-        }
-        // Load tool mtimes for cache-busting download URLs
-        try {
-          const [flasherRes, downgradeRes] = await Promise.all([
-            fetch('/tnaflasher/api/v1/tools/flasher-info'),
-            fetch('/tnaflasher/api/v1/tools/downgrade-info')
-          ])
-          if (flasherRes.ok) {
-            const fi = await flasherRes.json()
-            if (fi.modified_at) this.flasherMtime = fi.modified_at
-          }
-          if (downgradeRes.ok) {
-            const di = await downgradeRes.json()
-            if (di.modified_at) this.downgradeMtime = di.modified_at
-          }
-        } catch (e) {
-          // non-fatal — URLs work without the version suffix
-        }
-      },
-
       methods: {
+        // Load feature flags + tool mtimes (cache-busting). Called from created().
+        // (Previously this lived in a second `created()` hook which Vue silently
+        // dropped as a duplicate key — folded into a method + the real created().)
+        async loadToolInfo() {
+          try {
+            const res = await fetch('/tnaflasher/api/v1/feature-flags');
+            const flags = await res.json();
+            this.showAdvanced = flags.feature_advanced_page !== false;
+          } catch (err) {
+            console.error('Failed to load feature flags:', err);
+            this.showAdvanced = true;
+          }
+          // Load tool mtimes for cache-busting download URLs
+          try {
+            const [flasherRes, downgradeRes, loaderRes] = await Promise.all([
+              fetch('/tnaflasher/api/v1/tools/flasher-info'),
+              fetch('/tnaflasher/api/v1/tools/downgrade-info'),
+              fetch('/tnaflasher/api/v1/tools/k230-loader-info')
+            ])
+            if (flasherRes.ok) {
+              const fi = await flasherRes.json()
+              if (fi.modified_at) this.flasherMtime = fi.modified_at
+            }
+            if (downgradeRes.ok) {
+              const di = await downgradeRes.json()
+              if (di.modified_at) this.downgradeMtime = di.modified_at
+            }
+            if (loaderRes.ok) {
+              const li = await loaderRes.json()
+              if (li.modified_at) this.loaderMtime = li.modified_at
+            }
+          } catch (e) {
+            // non-fatal — URLs work without the version suffix
+          }
+        },
+
         notify(type, message) {
           const colorMap = { positive: 'positive', negative: 'negative', warning: 'warning', info: 'info' }
           this.notification = { color: colorMap[type] || 'info', message }
@@ -1139,6 +1351,132 @@
           this.notify('positive', 'Invoice copied!')
         },
 
+        async startWebUSBFlash() {
+          if (!this.flashToken) {
+            this.notify('negative', 'No payment token available')
+            return
+          }
+          if (!this.isWebUSBSupported) {
+            this.notify('negative', 'WebUSB not supported — use Chrome, Edge, Brave or Opera')
+            return
+          }
+          if (typeof window.K230Flasher === 'undefined') {
+            this.notify('negative', 'Flasher failed to load — refresh and try again')
+            return
+          }
+
+          // Require the user to confirm the prerequisites first.
+          if (!this.webusbReady) {
+            this.notify('warning', 'Please confirm all the checklist items first.')
+            return
+          }
+
+          const flasher = new window.K230Flasher({
+            onLog: (m) => this.log(m),
+            onProgress: (p) => this.onWebUSBProgress(p)
+          })
+
+          // --- Phase 1: prove the hardware is ready BEFORE burning the token. ---
+          // requestDevice (user gesture) -> open/claim -> KBURN mode handshake.
+          // No firmware download here, so a not-ready device costs nothing.
+          this.flashing = true
+          this.flashComplete = false
+          this.flashProgress = 0
+          this.webusbPhase = ''
+          this.webusbPartsDone = 0
+          this.webusbPartsTotal = 0
+          this.webusbDriverHelp = false
+          this.webusbFlasher = flasher
+          this.flashStatus = 'Checking your device…'
+          try {
+            await flasher.requestDevice()
+          } catch (e) {
+            this.flashing = false
+            this.webusbFlasher = null
+            this.notify('negative', 'No device selected. Put the miner in BOOT mode, then pick the 29F1:0230 device.')
+            return
+          }
+          try {
+            this.log('verifying device is in BOOT mode…')
+            await flasher.connectAndVerify()
+            this.webusbDriverHelp = false
+          } catch (e) {
+            this.flashing = false
+            this.flashStatus = ''
+            const msg = (e.message || String(e))
+            this.log('readiness check failed: ' + msg)
+            // A claim/access failure on Windows almost always means the WinUSB
+            // driver isn't bound — show the inline Zadig help panel, not just a toast.
+            const looksLikeDriver = /claim|driver|winusb|access|SecurityError|NotFoundError|unable to claim/i.test(msg)
+            if (looksLikeDriver) {
+              this.webusbDriverHelp = true
+              this.notify('negative', 'Could not access the device — see the driver help below.')
+            } else {
+              this.webusbDriverHelp = false
+              this.notify('negative', msg)
+            }
+            // Nothing was downloaded — the paid code is untouched. User can retry.
+            try { await flasher._close() } catch (_) {}
+            this.webusbFlasher = null
+            return
+          }
+
+          // --- Phase 2: device confirmed ready. Now download (burns token) + flash. ---
+          try {
+            this.flashStatus = 'Device ready — downloading firmware…'
+            this.log('device confirmed ready; downloading firmware image…')
+            const kdResp = await fetch(this.kdimgUrl, { cache: 'no-store' })
+            if (!kdResp.ok) throw new Error('firmware download failed (' + kdResp.status + ')')
+            const kdimgBuffer = await kdResp.arrayBuffer()
+
+            this.log('downloading device loader…')
+            const ldResp = await fetch(this.k230LoaderUrl, { cache: 'no-store' })
+            if (!ldResp.ok) throw new Error('loader download failed (' + ldResp.status + ')')
+            const loaderBytes = new Uint8Array(await ldResp.arrayBuffer())
+
+            this.flashStatus = 'Flashing — do not unplug…'
+            await flasher.flashImage(kdimgBuffer, loaderBytes)
+
+            this.flashProgress = 100
+            this.flashComplete = true
+            this.flashing = false
+            this.flashStatus = 'Complete'
+            this.notify('positive', 'Flash complete! Your Nano 3s is rebooting.')
+            try {
+              await api.request('POST', `/tnaflasher/api/v1/flash/complete/${this.paymentHash}?wallet_id=${WALLET_ID}`)
+            } catch (e) { /* non-fatal */ }
+          } catch (e) {
+            this.flashing = false
+            this.flashStatus = 'Failed'
+            this.log('ERROR: ' + (e.message || e))
+            this.notify('negative', 'Flash failed: ' + (e.message || e) + '. Re-enter BOOT mode and try again. If your code was already used, contact support to re-issue it.')
+          } finally {
+            this.webusbFlasher = null
+          }
+        },
+
+        onWebUSBProgress(p) {
+          // p: { phase, partName, current, total, partsDone, partsTotal }
+          this.webusbPhase = p.phase || this.webusbPhase
+          if (p.partName != null) this.webusbPartName = p.partName
+          if (p.partsTotal != null) this.webusbPartsTotal = p.partsTotal
+          if (p.partsDone != null) this.webusbPartsDone = p.partsDone
+
+          // Overall %: weight the phases — loader 0-10%, erase 10-25%, write 25-100%.
+          if (p.phase === 'loader') {
+            const frac = p.total ? (p.current / p.total) : 0
+            this.flashProgress = Math.round(frac * 10)
+          } else if (p.phase === 'erase') {
+            const frac = p.partsTotal ? (p.partsDone / p.partsTotal) : 0
+            this.flashProgress = 10 + Math.round(frac * 15)
+          } else if (p.phase === 'write') {
+            const perPart = p.partsTotal ? (1 / p.partsTotal) : 0
+            const within = p.total ? (p.current / p.total) : 0
+            const frac = (p.partsDone * perPart) + (within * perPart)
+            this.flashProgress = 25 + Math.round(frac * 75)
+          }
+        },
+
         async startFlashing() {
           if (!this.flashToken) {
             this.notify('negative', 'No flash token available')
@@ -1266,6 +1604,16 @@
           this.flashCodeExpiresAt = null
           this.flashCodeCountdown = ''
           if (this.flashCodeInterval) clearInterval(this.flashCodeInterval)
+          // Reset WebUSB (K230) flash state
+          this.webusbFlasher = null
+          this.webusbPhase = ''
+          this.webusbPartName = ''
+          this.webusbPartsDone = 0
+          this.webusbPartsTotal = 0
+          this.webusbAckBrowser = false
+          this.webusbAckDriver = false
+          this.webusbAckBoot = false
+          this.webusbDriverHelp = false
         }
       },
 
@@ -1278,6 +1626,9 @@
 
         // Store wallet_id for audit logging
         this.walletId = WALLET_ID
+
+        // Load feature flags + tool mtimes (cache-busting for download URLs)
+        await this.loadToolInfo()
 
         // Try to load devices - this validates the extension is working
         try {

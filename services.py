@@ -320,16 +320,20 @@ async def get_flash_status(payment_hash: str) -> dict:
                 }
             return {"status": request.status, "flash_method": "ssh"}
 
-        # WebSerial device — existing token behavior
+        # WebSerial (ESP32) and WebUSB (K230) — both are browser-driven and use
+        # a payment token. webusb downloads the .kdimg with it; webserial flashes
+        # over Web Serial. The page already knows the method from the device, but
+        # we echo it back for clarity.
+        method = miner.flash_method if miner else "webserial"
         if not request.token_used:
             token = generate_flash_token(
                 request.payment_hash,
                 request.device,
                 request.version
             )
-            return {"status": request.status, "token": token}
+            return {"status": request.status, "token": token, "flash_method": method}
         else:
-            return {"status": request.status, "token_used": True}
+            return {"status": request.status, "token_used": True, "flash_method": method}
 
     return {"status": request.status}
 

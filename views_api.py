@@ -174,11 +174,14 @@ async def api_download_firmware(
         device_mac=None
     )
 
-    # Return firmware file
+    # Return firmware file. Preserve the real extension (.bin for ESP32,
+    # .kdimg for K230/WebUSB) so the browser names the download correctly.
+    download_name = f"{device}_{version}{firmware_path.suffix}"
     return FileResponse(
         path=firmware_path,
-        filename=f"{device}_{version}.bin",
-        media_type="application/octet-stream"
+        filename=download_name,
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "no-store"}
     )
 
 
@@ -383,6 +386,18 @@ def _tools_dir() -> Path:
 def _tool_path(filename: str) -> Path:
     """Return path to a tool file in the persistent data dir."""
     return _tools_dir() / filename
+
+
+@tnaflasher_api_router.get("/tools/k230-loader-info")
+async def api_k230_loader_info():
+    """Return mtime of the bundled K230 SPI-NAND loader blob (public, for
+    cache-busting the static asset on Umbrel's nginx). The loader itself is
+    served as a static file at /tnaflasher/static/loaders/loader_spi_nand.bin."""
+    path = Path(__file__).parent / "static" / "loaders" / "loader_spi_nand.bin"
+    if not path.exists():
+        return {"exists": False}
+    stat = path.stat()
+    return {"exists": True, "size": stat.st_size, "modified_at": int(stat.st_mtime)}
 
 
 @tnaflasher_api_router.get("/tools/flasher-info")
@@ -674,10 +689,25 @@ async def api_admin_upload_firmware(
         if not file.filename.endswith(".tar.gz") and not file.filename.endswith(".tgz"):
             raise HTTPException(status_code=400, detail="SSH miners require .tar.gz firmware files")
         file_ext = ".tar.gz"
+    elif miner.flash_method == "webusb":
+        if not file.filename.lower().endswith(".kdimg"):
+            raise HTTPException(status_code=400, detail="WebUSB (K230) miners require .kdimg firmware files")
+        file_ext = ".kdimg"
     else:
         if not file.filename.endswith(".bin"):
             raise HTTPException(status_code=400, detail="WebSerial miners require .bin firmware files")
         file_ext = ".bin"
+
+    # Read the upload up-front so webusb can validate the kdimg before saving
+    content = await file.read()
+
+    # For WebUSB (K230) validate the kdimg integrity markers: file magic
+    # 0x27CB8F93 (LE) at offset 0 and size > 1 MiB (a truncated upload is invalid).
+    if miner.flash_method == "webusb":
+        if len(content) < 1024 * 1024:
+            raise HTTPException(status_code=400, detail="kdimg too small (< 1 MiB) — upload looks truncated")
+        if len(content) < 4 or int.from_bytes(content[:4], "little") != 0x27CB8F93:
+            raise HTTPException(status_code=400, detail="Not a valid .kdimg (bad file magic, expected 0x27CB8F93)")
 
     # Create miner directory if needed
     firmware_dir = get_firmware_dir()
@@ -686,7 +716,6 @@ async def api_admin_upload_firmware(
 
     # Save the file
     file_path = miner_dir / f"{version}{file_ext}"
-    content = await file.read()
     file_path.write_bytes(content)
 
     # Create firmware record in database (store relative path)

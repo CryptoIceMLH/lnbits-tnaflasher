@@ -1,0 +1,8 @@
+# Local working/handoff material — never commit
+TEMP/
+*.kdimg
+NANO3S-FLASHER-HANDOFF.md
+
+# Python
+__pycache__/
+*.pyc
