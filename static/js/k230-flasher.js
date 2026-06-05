@@ -436,16 +436,14 @@
       return resp.subarray(HEADER_SIZE, HEADER_SIZE + respSize);
     }
 
-    /** NOP — drain a stale reply (with a 1s timeout, like the Python ref) then
-     *  clear device error state. The drain read MUST time out: on a fresh handle
-     *  there's nothing to read, and WebUSB transferIn would otherwise block
-     *  forever. A timeout here is expected and harmless. */
+    /** NOP — clear device error state.
+     *  IMPORTANT: do NOT do a speculative "drain" transferIn here. In WebUSB a
+     *  timed-out transferIn is NOT actually cancelled — it stays queued on the
+     *  endpoint. A second transferIn (for the real reply) then sits behind it,
+     *  and the device's reply gets delivered to the abandoned drain read, so the
+     *  real read hangs forever. (libusb/pyusb can do the drain because its read
+     *  timeout truly cancels — WebUSB can't.) So just send the NOP and read once. */
     async nop() {
-      try {
-        await this._transferInTimeout(this.epInPacketSize || 512, 300);
-      } catch (e) {
-        /* timeout / nothing to drain — expected, ignore */
-      }
       await this.sendCmd(CMD_NONE, new Uint8Array(0), 16);
     }
 
