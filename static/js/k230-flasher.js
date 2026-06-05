@@ -417,6 +417,14 @@
       const respResult = rdv.getUint16(2, true);
       const respSize = rdv.getUint16(4, true);
 
+      // NOP (CMD_NONE) just clears error state. The device replies with an error
+      // ("NOT SUPPORT FUNC" in the vendor log) — different cmd echo, non-OK result,
+      // and possibly a different data_size. The stock tool logs it and moves on.
+      // So for NOP we accept WHATEVER comes back and don't validate anything.
+      if (cmd === CMD_NONE) {
+        return resp.subarray(HEADER_SIZE, Math.min(HEADER_SIZE + respSize, resp.length));
+      }
+
       if (respCmd !== (cmd | CMD_FLAG_DEV_TO_HOST)) {
         throw new Error(
           "response cmd mismatch: got 0x" +
@@ -425,9 +433,7 @@
             (cmd | CMD_FLAG_DEV_TO_HOST).toString(16)
         );
       }
-      // NOP (CMD_NONE) is allowed to return a non-OK result — it's just clearing
-      // error state. Every other command must be OK.
-      if (respResult !== KBURN_RESULT_OK && cmd !== CMD_NONE) {
+      if (respResult !== KBURN_RESULT_OK) {
         throw new Error("device error result 0x" + respResult.toString(16) + " (cmd 0x" + cmd.toString(16) + ")");
       }
       if (respSize !== expectedRespLen) {
