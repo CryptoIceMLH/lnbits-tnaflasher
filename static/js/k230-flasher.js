@@ -216,46 +216,51 @@
 
     async _open() {
       const dev = this.device;
+      // ALWAYS rediscover from THIS device's own config — never carry over the
+      // previous (BROM) device's endpoints. BROM uses OUT 0x01, the loader uses
+      // OUT 0x02; reusing the old number sends probe into a black hole and hangs.
+      this.epIn = null;
+      this.epOut = null;
+      this.iface = null;
+
       await dev.open();
       if (dev.configuration === null) {
         await dev.selectConfiguration(1);
       }
-      // Find the interface that has our bulk endpoints and claim it.
+      // Find the interface that has bulk IN+OUT endpoints and claim it. Port of
+      // burners._discover_endpoints(): walk the active config, take the bulk IN
+      // (addr & 0x80) and bulk OUT from whichever interface exposes them.
       const cfg = dev.configuration;
       let claimed = false;
       for (const iface of cfg.interfaces) {
         const alt = iface.alternate;
-        const hasBulk = alt.endpoints.some((e) => e.type === "bulk");
-        if (!hasBulk) continue;
+        const inEp = alt.endpoints.find((e) => e.type === "bulk" && e.direction === "in");
+        const outEp = alt.endpoints.find((e) => e.type === "bulk" && e.direction === "out");
+        if (!inEp || !outEp) continue; // need BOTH on the same interface
         try {
           await dev.claimInterface(iface.interfaceNumber);
         } catch (e) {
           // On Windows a wrong/no WinUSB driver bind surfaces here.
           throw new Error(
-            "Could not claim the USB interface. On Windows the device needs " +
-              "the WinUSB driver bound to 29F1:0230 (use Zadig once). (" +
-              e.message +
-              ")"
+            "Could not claim the USB interface. On Windows the device needs the " +
+              "WinUSB driver bound to it (use Zadig once — note the loader 'USB " +
+              "download gadget' may need its own bind). (" + e.message + ")"
           );
         }
         this.iface = iface.interfaceNumber;
-        for (const ep of alt.endpoints) {
-          if (ep.type !== "bulk") continue;
-          if (ep.direction === "in") this.epIn = ep.endpointNumber;
-          else this.epOut = ep.endpointNumber;
-        }
+        this.epIn = inEp.endpointNumber;
+        this.epOut = outEp.endpointNumber;
         claimed = true;
         break;
       }
-      if (!claimed) throw new Error("No bulk interface found on the device");
+      if (!claimed) throw new Error("No interface with both bulk IN+OUT endpoints found");
       if (this.epIn == null || this.epOut == null) {
         throw new Error("Could not locate bulk IN/OUT endpoints");
       }
       this.log(
         "USB ready — claimed interface " + this.iface +
-          ", configs=" + dev.configurations.length +
           ", interfaces=" + cfg.interfaces.length +
-          ", epIn=0x" + this.epIn.toString(16) + " epOut=0x" + this.epOut.toString(16)
+          ", epIn=#" + this.epIn + " epOut=#" + this.epOut
       );
       if (this._debug) {
         // Dump the full interface/endpoint map of the loader device so we can
