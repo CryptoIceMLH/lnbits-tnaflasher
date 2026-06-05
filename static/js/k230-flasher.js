@@ -138,7 +138,7 @@
      *  can take several seconds. We try to open each candidate (a stale BROM
      *  handle won't open), up to `attempts` times. The `connect` event catches
      *  cases where getDevices() lags. Returns an opened+claimed device, or null. */
-    async _waitForReenumeratedDevice(attempts = 20, delayMs = 700) {
+    async _waitForReenumeratedDevice(attempts = 3, delayMs = 600) {
       // Capture the next matching `connect` event, if any.
       let connectedDev = null;
       const onConnect = (e) => {
@@ -162,8 +162,7 @@
             }
           }
           if (!dev) {
-            this.log("  …waiting for device to re-appear (" + (i + 1) + "/" + attempts + ")");
-            continue;
+            continue; // not granted to us — expected; we fall back to re-pick
           }
           // Try to open + claim it. A stale/closing handle throws; the fresh
           // loader-mode instance opens cleanly.
@@ -172,7 +171,6 @@
             await this._open();
             return dev;
           } catch (e) {
-            this.log("  …device seen but not ready yet (" + (i + 1) + "/" + attempts + "): " + (e.message || e));
             try { await dev.close(); } catch (_) {}
             this.device = null;
             connectedDev = null; // re-poll on next loop
@@ -182,6 +180,28 @@
         try { navigator.usb.removeEventListener("connect", onConnect); } catch (_) {}
       }
       return null;
+    }
+
+    /**
+     * transferIn with a timeout. WebUSB's transferIn has NO native timeout and
+     * blocks forever if the device sends nothing — which hangs us (e.g. the NOP
+     * drain read on a fresh handle, or a command that gets no reply). The Python
+     * reference uses a 1s libusb timeout; we race the read against a timer.
+     * On timeout we throw a tagged error (the caller decides if that's fatal).
+     * Note: the underlying USB read isn't truly cancelled, but the device
+     * delivers at most one stale packet later, which the next NOP drains.
+     */
+    _transferInTimeout(len, timeoutMs) {
+      const read = this.device.transferIn(this.epIn, len);
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const err = new Error("transferIn timeout");
+          err._timeout = true;
+          reject(err);
+        }, timeoutMs);
+      });
+      return Promise.race([read, timeout]).finally(() => clearTimeout(timer));
     }
 
     async _open() {
@@ -324,9 +344,9 @@
     /**
      * Send a 60-byte KBURN packet and (optionally) read+validate the 60-byte
      * reply. Returns the response payload (Uint8Array of expectedRespLen) or
-     * null when expectedRespLen === 0.
+     * null when expectedRespLen === 0. respTimeoutMs bounds the reply wait.
      */
-    async sendCmd(cmd, payload, expectedRespLen) {
+    async sendCmd(cmd, payload, expectedRespLen, respTimeoutMs = 8000) {
       payload = payload || new Uint8Array(0);
       if (payload.length > MAX_DATA_SIZE) {
         throw new Error("command payload too large: " + payload.length);
@@ -343,7 +363,10 @@
 
       if (expectedRespLen === 0) return null;
 
-      const rd = await this.device.transferIn(this.epIn, PACKET_SIZE);
+      // Read the reply with a timeout so a non-replying command errors instead
+      // of hanging forever (WebUSB transferIn has no native timeout). respTimeoutMs
+      // is generous — the 56 MiB data-partition erase can take ~5s before its ACK.
+      const rd = await this._transferInTimeout(PACKET_SIZE, respTimeoutMs);
       if (rd.status !== "ok" || !rd.data || rd.data.byteLength < HEADER_SIZE) {
         throw new Error("command response read failed (cmd 0x" + cmd.toString(16) + ")");
       }
@@ -372,12 +395,15 @@
       return resp.subarray(HEADER_SIZE, HEADER_SIZE + respSize);
     }
 
-    /** NOP — drain a stale reply then clear device error state. */
+    /** NOP — drain a stale reply (with a 1s timeout, like the Python ref) then
+     *  clear device error state. The drain read MUST time out: on a fresh handle
+     *  there's nothing to read, and WebUSB transferIn would otherwise block
+     *  forever. A timeout here is expected and harmless. */
     async nop() {
       try {
-        await this.device.transferIn(this.epIn, PACKET_SIZE);
+        await this._transferInTimeout(PACKET_SIZE, 1000);
       } catch (e) {
-        /* timeout/stall is fine */
+        /* timeout / nothing to drain — expected, ignore */
       }
       await this.sendCmd(CMD_NONE, new Uint8Array(0), 16);
     }
@@ -428,8 +454,8 @@
       payload.set(u64le(offset), 0);
       payload.set(u64le(size), 8);
       // Erase returns an ACK packet; burners.erase_lba waits for one read.
-      // We use sendCmd with expectedRespLen=16 to consume + validate that ACK.
-      await this.sendCmd(CMD_ERASE_LBA, payload, 16);
+      // The 56 MiB data partition can take ~5s before its ACK — give it 60s.
+      await this.sendCmd(CMD_ERASE_LBA, payload, 16, 60000);
     }
 
     /** write_start (0x21): <QQQQ> = (offset, size, size, flags=0), expect 8. */
@@ -545,15 +571,17 @@
         // Close our stale handle, then try to auto-reacquire it.
         try { await this._close(); } catch (_) {}
         this.device = null;
-        this.log("waiting for the device to switch into loader mode…");
+        this.log("miner is switching into flashing mode…");
+        // Quick auto-reacquire attempt (a couple of tries). It almost never
+        // succeeds — the loader is a NEW USB device the page wasn't granted —
+        // so we go straight to the re-pick rather than counting down.
         let redev = await this._waitForReenumeratedDevice();
 
-        // Auto-reacquire fails when the loader-mode device is a NEW USB instance
-        // the page wasn't granted (the common case on Windows — the WebUSB
-        // permission was for the BROM instance only, so getDevices() can't see
-        // the loader instance). Fall back to a user-gesture re-pick.
+        // Re-pick: the loader-mode device is a new USB instance the page wasn't
+        // granted, so WebUSB can't auto-return it. requestDevice() needs a user
+        // gesture, so the page surfaces a quick prompt and we resume here.
         if (!redev && typeof opts.repick === "function") {
-          this.log("loader-mode device needs to be re-selected — prompting…");
+          this.log("reconnect: select the miner again to continue…");
           let picked = null;
           try {
             picked = await opts.repick();
