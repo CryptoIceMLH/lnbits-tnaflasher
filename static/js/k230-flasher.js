@@ -132,6 +132,58 @@
       );
     }
 
+    /** Poll getDevices() (and listen for the WebUSB `connect` event) for the
+     *  re-enumerated, openable device after the BROM->loader switch. The device
+     *  drops USB, reboots the loader, and re-appears (same 29F1:0230) — which
+     *  can take several seconds. We try to open each candidate (a stale BROM
+     *  handle won't open), up to `attempts` times. The `connect` event catches
+     *  cases where getDevices() lags. Returns an opened+claimed device, or null. */
+    async _waitForReenumeratedDevice(attempts = 20, delayMs = 700) {
+      // Capture the next matching `connect` event, if any.
+      let connectedDev = null;
+      const onConnect = (e) => {
+        const d = e.device;
+        if (d && d.vendorId === K230_VID && d.productId === K230_PID) connectedDev = d;
+      };
+      try {
+        navigator.usb.addEventListener("connect", onConnect);
+      } catch (_) {}
+
+      try {
+        for (let i = 0; i < attempts; i++) {
+          await sleep(delayMs);
+          let dev = connectedDev;
+          if (!dev) {
+            try {
+              const devs = await navigator.usb.getDevices();
+              dev = devs.find((d) => d.vendorId === K230_VID && d.productId === K230_PID) || null;
+            } catch (e) {
+              dev = null;
+            }
+          }
+          if (!dev) {
+            this.log("  …waiting for device to re-appear (" + (i + 1) + "/" + attempts + ")");
+            continue;
+          }
+          // Try to open + claim it. A stale/closing handle throws; the fresh
+          // loader-mode instance opens cleanly.
+          try {
+            this.device = dev;
+            await this._open();
+            return dev;
+          } catch (e) {
+            this.log("  …device seen but not ready yet (" + (i + 1) + "/" + attempts + "): " + (e.message || e));
+            try { await dev.close(); } catch (_) {}
+            this.device = null;
+            connectedDev = null; // re-poll on next loop
+          }
+        }
+      } finally {
+        try { navigator.usb.removeEventListener("connect", onConnect); } catch (_) {}
+      }
+      return null;
+    }
+
     async _open() {
       const dev = this.device;
       await dev.open();
@@ -482,23 +534,30 @@
       if (mode === DEV_BROM) {
         this.log("device in BROM mode — uploading loader");
         await this.uploadLoader(loaderBytes);
-        // Re-enumerate: the old handle is dead. Close, wait, reacquire.
-        await this._close();
+        // Re-enumerate: after boot_from, the BROM handle is dead. The device
+        // drops USB, reboots into the loader, and re-appears (same 29F1:0230).
+        // Close our stale handle, then poll for the fresh instance + open it.
+        try { await this._close(); } catch (_) {}
         this.device = null;
-        await sleep(2000);
-        const redev = await this._findGrantedDevice();
+        this.log("waiting for the device to switch into loader mode…");
+        const redev = await this._waitForReenumeratedDevice();
         if (!redev) {
           throw new Error(
-            "device did not re-appear after loader upload — replug not expected; " +
-              "check the loader/driver"
+            "Device didn't come back in loader mode after the loader upload. " +
+              "Re-enter BOOT mode (hold recovery + replug), then try again. " +
+              "If it persists, the WinUSB driver may need to be re-bound to the " +
+              "loader-mode device in Zadig as well."
           );
         }
-        this.device = redev;
-        await this._open();
+        // _waitForReenumeratedDevice() already opened + claimed it.
         mode = await this.detectMode();
         if (mode !== DEV_UBOOT) {
-          throw new Error("device did not enter loader (U-Boot) mode after loader upload");
+          throw new Error(
+            "Device re-appeared but isn't in loader mode (got mode " + mode + "). " +
+              "Re-enter BOOT mode and try again."
+          );
         }
+        this.log("device is now in loader mode");
       } else if (mode !== DEV_UBOOT) {
         throw new Error("unexpected device mode: " + mode + " (is it in BOOT mode?)");
       }
