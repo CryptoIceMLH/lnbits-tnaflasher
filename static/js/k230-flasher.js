@@ -97,6 +97,7 @@
       this.epOut = null;
       this.outChunkSize = 512; // overwritten by probe()
       this.inChunkSize = 512;
+      this.epInPacketSize = 512; // max packet size of the bulk IN endpoint
       this.blkSz = 512;
       this.capacity = 0;
       this._verifiedMode = null; // set by connectAndVerify()
@@ -250,6 +251,10 @@
         this.iface = iface.interfaceNumber;
         this.epIn = inEp.endpointNumber;
         this.epOut = outEp.endpointNumber;
+        // WebUSB transferIn requires the requested length to be a multiple of
+        // the endpoint's max packet size (e.g. 512). Reading 60 hangs/errors on
+        // Chrome even though the device replies. Read a full packet, slice later.
+        this.epInPacketSize = inEp.packetSize || 512;
         claimed = true;
         break;
       }
@@ -399,7 +404,9 @@
       // Read the reply with a timeout so a non-replying command errors instead
       // of hanging forever (WebUSB transferIn has no native timeout). respTimeoutMs
       // is generous — the 56 MiB data-partition erase can take ~5s before its ACK.
-      const rd = await this._transferInTimeout(PACKET_SIZE, respTimeoutMs);
+      // NOTE: request a FULL max-packet (e.g. 512), not 60 — Chrome's WebUSB needs
+      // the length to be a multiple of the endpoint packet size or it hangs.
+      const rd = await this._transferInTimeout(this.epInPacketSize, respTimeoutMs);
       if (rd.status !== "ok" || !rd.data || rd.data.byteLength < HEADER_SIZE) {
         throw new Error("command response read failed (cmd 0x" + cmd.toString(16) + ")");
       }
@@ -434,7 +441,7 @@
      *  forever. A timeout here is expected and harmless. */
     async nop() {
       try {
-        await this._transferInTimeout(PACKET_SIZE, 1000);
+        await this._transferInTimeout(this.epInPacketSize || 512, 300);
       } catch (e) {
         /* timeout / nothing to drain — expected, ignore */
       }
