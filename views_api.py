@@ -63,6 +63,8 @@ from .crud import (
     check_rate_limit,
     record_rate_limit_attempt,
     get_all_flash_codes,
+    stamp_ssh_fetched,
+    set_flash_code_device_mac,
 )
 from .services import (
     get_available_devices,
@@ -358,22 +360,140 @@ async def api_download_single_file(
     raise HTTPException(status_code=404, detail=f"File {file} not found in firmware")
 
 
+@tnaflasher_api_router.get("/flash/ssh-key")
+async def api_get_ssh_credential(
+    code: str = Query(...),
+    request: Request = None
+):
+    """Hand the per-payment SSH credential to the flasher, just-in-time.
+    Code-gated (accepts an in-progress/used code — the client calls this AFTER
+    filelist, which already marked it used) + rate-limited + audited. Key mode
+    returns ONLY {kind, pub}; the private key stays server-side (owner recovery).
+    A 404/non-200 here makes the flasher ABORT, so we must reliably return a key.
+    See PER-PAYMENT-SSH-KEY-HANDOFF.md §2a."""
+    client_ip = request.client.host if request and request.client else "unknown"
+    within_limit = await check_rate_limit(client_ip, "ssh-key", max_attempts=30, window_seconds=3600)
+    if not within_limit:
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+    await record_rate_limit_attempt(client_ip, "ssh-key")
+
+    # check_used=False — the code is already 'used' by the time the flasher gets here.
+    result = await verify_flash_code(code.upper(), check_used=False)
+    if not result.get("valid"):
+        raise HTTPException(status_code=403, detail=result.get("error", "Invalid or expired flash code"))
+
+    flash_code_obj = await get_flash_code_by_code(code.upper())
+    if not flash_code_obj or not flash_code_obj.ssh_kind:
+        # No credential on this row — should never happen for a paid code, but if it
+        # does, fail loudly (flasher aborts) rather than ship a default-password box.
+        raise HTTPException(status_code=404, detail="No SSH credential issued for this code")
+
+    kind = flash_code_obj.ssh_kind
+    # Build the minimal response the client parses. Key mode: only {kind, pub}.
+    if kind == "ed25519":
+        if not flash_code_obj.ssh_pub:
+            raise HTTPException(status_code=404, detail="SSH public key missing for this code")
+        body = {"kind": "ed25519", "pub": flash_code_obj.ssh_pub}
+    elif kind == "password":
+        # Password mode returns the $6$ crypt hash (never plaintext).
+        if not flash_code_obj.ssh_secret:
+            raise HTTPException(status_code=404, detail="SSH secret missing for this code")
+        body = {"kind": "password", "secret": flash_code_obj.ssh_secret}
+    else:
+        raise HTTPException(status_code=404, detail=f"Unknown ssh credential kind: {kind}")
+
+    await stamp_ssh_fetched(code.upper())
+
+    payment_ref = flash_code_obj.payment_hash[:16] if flash_code_obj.payment_hash else "unknown"
+    await create_audit_log(
+        wallet_id="public",
+        action="ssh_credential_fetched",
+        details=f"Code: {code.upper()}, Kind: {kind}, IP: {client_ip}, Ref: {payment_ref}...",
+        device_mac=None
+    )
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=body, headers={"Cache-Control": "no-store"})
+
+
+@tnaflasher_api_router.post("/flash/report-device")
+async def api_report_device(
+    code: str = Query(...),
+    mac: str = Query(None),
+    ip: str = Query(None),
+    request: Request = None
+):
+    """Optional: the flasher reports the flashed device's MAC so the owner's
+    key<->device map is complete. NOT called by the v0.9.0 client yet — best-effort
+    endpoint for a future client update. Code-gated, does NOT mark the code used."""
+    client_ip = request.client.host if request and request.client else "unknown"
+    within_limit = await check_rate_limit(client_ip, "report-device", max_attempts=30, window_seconds=3600)
+    if not within_limit:
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+    await record_rate_limit_attempt(client_ip, "report-device")
+
+    result = await verify_flash_code(code.upper(), check_used=False)
+    if not result.get("valid"):
+        raise HTTPException(status_code=403, detail=result.get("error", "Invalid or expired flash code"))
+
+    if mac:
+        await set_flash_code_device_mac(code.upper(), mac)
+        await create_audit_log(
+            wallet_id="public",
+            action="device_reported",
+            details=f"Code: {code.upper()}, MAC: {mac}, IP: {ip or client_ip}",
+            device_mac=mac
+        )
+    return {"ok": True}
+
+
 @tnaflasher_api_router.get("/admin/flash-codes")
 async def api_admin_get_flash_codes(
     limit: int = Query(200, ge=1, le=1000),
     user: User = Depends(check_admin)
 ):
-    """Get all SSH flash codes with status (admin only)"""
+    """Get all SSH flash codes with status (admin only).
+    The ed25519 private key (ssh_secret) is REDACTED from the list — pull it from
+    the dedicated recovery endpoint per code when actually needed."""
     codes = await get_all_flash_codes(limit=limit)
     miners = {m.id: m for m in await get_miners()}
     result = []
     for c in codes:
         miner = miners.get(c.device)
+        row = c.dict()
+        if row.get("ssh_secret"):
+            row["ssh_secret"] = "<redacted — use /credential endpoint>"
         result.append({
-            **c.dict(),
+            **row,
             "miner_name": miner.name if miner else c.device
         })
     return {"flash_codes": result}
+
+
+@tnaflasher_api_router.get("/admin/flash-codes/{code}/credential")
+async def api_admin_get_credential(
+    code: str,
+    user: User = Depends(check_admin)
+):
+    """Owner recovery: full per-payment SSH credential for a code (admin only).
+    This is the ONLY endpoint that returns the ed25519 private key. Use it to get
+    back into any device later (payment -> code -> key -> device MAC).
+    See PER-PAYMENT-SSH-KEY-HANDOFF.md §1.3."""
+    fc = await get_flash_code_by_code(code.upper())
+    if not fc:
+        raise HTTPException(status_code=404, detail="Flash code not found")
+    return {
+        "code": fc.code,
+        "payment_hash": fc.payment_hash,
+        "device": fc.device,
+        "version": fc.version,
+        "username": fc.ssh_username,
+        "kind": fc.ssh_kind,
+        "pub": fc.ssh_pub,
+        "secret": fc.ssh_secret,        # the private key / crypt hash — admin only
+        "device_mac": fc.device_mac,
+        "ssh_fetched_at": fc.ssh_fetched_at,
+    }
 
 
 def _tools_dir() -> Path:

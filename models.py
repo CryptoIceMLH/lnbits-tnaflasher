@@ -203,12 +203,29 @@ class FlashCode(BaseModel):
     expires_at: Optional[int] = None
     used_at: Optional[int] = None
     used_ip: Optional[str] = None
+    # Per-payment SSH credential (m011) — TNA-OS lockdown + future update-auth identity
+    ssh_username: Optional[str] = None
+    ssh_secret: Optional[str] = None   # owner record: ed25519 private key (PEM) or password crypt hash
+    ssh_pub: Optional[str] = None      # key mode: full authorized_keys line
+    ssh_kind: Optional[str] = None     # "ed25519" | "password"
+    ssh_fetched_at: Optional[int] = None
+    device_mac: Optional[str] = None
 
 
 class FlashCodeResponse(BaseModel):
     """Response when flash code is generated after payment"""
     code: str
     expires_at: int
+
+
+class SSHCredentialResponse(BaseModel):
+    """Public /flash/ssh-key response — MUST match the shipped Go client's
+    `sshCredential` struct (see PER-PAYMENT-SSH-KEY-HANDOFF.md §2a). Key mode
+    returns only kind + pub; the private key never crosses the wire."""
+    username: str = "root"
+    kind: str                       # "ed25519" | "password"
+    pub: Optional[str] = None       # key mode: full authorized_keys line
+    secret: Optional[str] = None    # password mode only: $6$ crypt hash (never the ed25519 private key)
     device: str
     version: str
 

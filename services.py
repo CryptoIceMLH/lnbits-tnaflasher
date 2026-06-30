@@ -349,22 +349,74 @@ def generate_flash_code() -> str:
     return f"TNA-{part1}-{part2}"
 
 
+def generate_ssh_ed25519(comment: str = "tna") -> dict:
+    """Generate a per-device ed25519 SSH credential.
+    Returns {username, kind, pub, secret} where:
+      - pub    = full OpenSSH authorized_keys line ("ssh-ed25519 AAAA... <comment>")
+      - secret = OpenSSH-format PEM private key (owner's recovery record; NEVER
+                 returned to the flasher in key mode — the device only needs pub)
+    The comment is cosmetic (Dropbear ignores it); we tag it with the flash code so
+    the owner can eyeball which key is on a box. See PER-PAYMENT-SSH-KEY-HANDOFF §2a."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization
+
+    key = Ed25519PrivateKey.generate()
+    pub_line = key.public_key().public_bytes(
+        serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH
+    ).decode("ascii")
+    priv_pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.OpenSSH,
+        serialization.NoEncryption(),
+    ).decode("ascii")
+    return {
+        "username": "root",
+        "kind": "ed25519",
+        "pub": f"{pub_line} {comment}".strip(),   # authorized_keys line with comment
+        "secret": priv_pem,
+    }
+
+
 async def create_flash_code_for_payment(
     payment_hash: str,
     device: str,
     version: str
 ) -> "FlashCode":
-    """Generate and store a flash code after payment confirmation"""
+    """Generate and store a flash code + per-payment SSH credential after payment.
+    The ed25519 credential is created here so it's ready when the flasher fetches
+    /flash/ssh-key mid-install. The private key stays in the DB (owner recovery /
+    future update-auth identity); only the public key ever reaches the device."""
     code = generate_flash_code()
     expires_at = int(time.time()) + FLASH_CODE_EXPIRY_SECONDS
 
-    return await crud_create_flash_code(
+    # Tag the key comment with the code so the owner can identify it on a device.
+    cred = generate_ssh_ed25519(comment=f"tna-{code}")
+
+    flash_code = await crud_create_flash_code(
         code=code,
         payment_hash=payment_hash,
         device=device,
         version=version,
-        expires_at=expires_at
+        expires_at=expires_at,
+        ssh_username=cred["username"],
+        ssh_kind=cred["kind"],
+        ssh_pub=cred["pub"],
+        ssh_secret=cred["secret"],
     )
+
+    # Owner recovery record — reference only, NEVER the secret in audit details.
+    try:
+        from .crud import create_audit_log
+        await create_audit_log(
+            wallet_id="public",
+            action="ssh_credential_issued",
+            details=f"code={code}, payment_ref={payment_hash[:16]}..., kind={cred['kind']}",
+            device_mac=None,
+        )
+    except Exception:
+        pass  # audit failure must not block credential issuance
+
+    return flash_code
 
 
 async def verify_flash_code(code: str, check_used: bool = True) -> dict:

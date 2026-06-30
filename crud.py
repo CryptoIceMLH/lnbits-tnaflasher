@@ -747,17 +747,24 @@ async def create_flash_code(
     payment_hash: str,
     device: str,
     version: str,
-    expires_at: int
+    expires_at: int,
+    ssh_username: Optional[str] = None,
+    ssh_kind: Optional[str] = None,
+    ssh_pub: Optional[str] = None,
+    ssh_secret: Optional[str] = None,
 ) -> FlashCode:
-    """Create a one-time flash code for SSH-based flashing"""
+    """Create a one-time flash code for SSH-based flashing, with its per-payment
+    SSH credential (m011). The ssh_* fields are the owner's permanent record."""
     code_id = str(uuid4())
     now = int(time.time())
 
     await db.execute(
         """
         INSERT INTO tnaflasher.flash_codes
-        (id, code, payment_hash, device, version, status, created_at, expires_at)
-        VALUES (:id, :code, :payment_hash, :device, :version, 'unused', :created_at, :expires_at)
+        (id, code, payment_hash, device, version, status, created_at, expires_at,
+         ssh_username, ssh_kind, ssh_pub, ssh_secret)
+        VALUES (:id, :code, :payment_hash, :device, :version, 'unused', :created_at, :expires_at,
+                :ssh_username, :ssh_kind, :ssh_pub, :ssh_secret)
         """,
         {
             "id": code_id,
@@ -766,7 +773,11 @@ async def create_flash_code(
             "device": device,
             "version": version,
             "created_at": now,
-            "expires_at": expires_at
+            "expires_at": expires_at,
+            "ssh_username": ssh_username,
+            "ssh_kind": ssh_kind,
+            "ssh_pub": ssh_pub,
+            "ssh_secret": ssh_secret,
         }
     )
 
@@ -778,7 +789,31 @@ async def create_flash_code(
         version=version,
         status="unused",
         created_at=now,
-        expires_at=expires_at
+        expires_at=expires_at,
+        ssh_username=ssh_username,
+        ssh_kind=ssh_kind,
+        ssh_pub=ssh_pub,
+        ssh_secret=ssh_secret,
+    )
+
+
+async def stamp_ssh_fetched(code: str) -> None:
+    """Record when the flasher fetched the SSH credential (audit/recovery aid)."""
+    await db.execute(
+        """
+        UPDATE tnaflasher.flash_codes SET ssh_fetched_at = :now WHERE code = :code
+        """,
+        {"now": int(time.time()), "code": code.upper()}
+    )
+
+
+async def set_flash_code_device_mac(code: str, device_mac: str) -> None:
+    """Record the device MAC for the owner's key<->device map (report-device)."""
+    await db.execute(
+        """
+        UPDATE tnaflasher.flash_codes SET device_mac = :mac WHERE code = :code
+        """,
+        {"mac": device_mac, "code": code.upper()}
     )
 
 

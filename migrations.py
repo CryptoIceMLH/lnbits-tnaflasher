@@ -204,3 +204,16 @@ async def m010_firmware_file_size(db):
         ALTER TABLE tnaflasher.firmware ADD COLUMN file_size_bytes INTEGER NOT NULL DEFAULT 0
         """
     )
+
+
+async def m011_add_ssh_credential(db):
+    """Per-payment SSH credential for TNA-OS lockdown (see PER-PAYMENT-SSH-KEY).
+    Stored on the flash_codes row at code-creation time. The credential row is the
+    owner's permanent recovery record (payment -> code -> key -> device MAC) and is
+    NOT purged with the short-lived code — it is the future paid-update license DB."""
+    await db.execute("ALTER TABLE tnaflasher.flash_codes ADD COLUMN ssh_username TEXT")
+    await db.execute("ALTER TABLE tnaflasher.flash_codes ADD COLUMN ssh_secret TEXT")      # owner's record: ed25519 private key (PEM) or password crypt hash
+    await db.execute("ALTER TABLE tnaflasher.flash_codes ADD COLUMN ssh_pub TEXT")         # key mode: full authorized_keys line
+    await db.execute("ALTER TABLE tnaflasher.flash_codes ADD COLUMN ssh_kind TEXT")        # 'ed25519' | 'password'
+    await db.execute("ALTER TABLE tnaflasher.flash_codes ADD COLUMN ssh_fetched_at TIMESTAMP")
+    await db.execute("ALTER TABLE tnaflasher.flash_codes ADD COLUMN device_mac TEXT")
