@@ -1,7 +1,14 @@
-# Local working/handoff material — never commit
+# Local working/handoff material — never commit (keeps attack-surface docs off the public repo)
 TEMP/
 *.kdimg
+*-HANDOFF.md
 NANO3S-FLASHER-HANDOFF.md
+PER-PAYMENT-SSH-KEY-HANDOFF.md
+INSTALL_GUIDE.md
+TNA_FLASHER_EXE_INTEGRATION.md
+
+# Local editor/agent config — not for the public repo
+.claude/
 
 # Python
 __pycache__/
