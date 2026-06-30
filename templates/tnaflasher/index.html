@@ -693,7 +693,7 @@
             </template>
             <template v-slot:body-cell-ssh_kind="props">
               <q-td :props="props">
-                <q-badge v-if="props.row.ssh_kind" :color="props.row.ssh_kind === 'ed25519' ? 'teal' : 'orange'" :label="props.row.ssh_kind" />
+                <q-badge v-if="props.row.ssh_kind" :color="props.row.ssh_kind === 'ed25519' ? 'teal' : 'orange'" :label="props.row.ssh_kind"></q-badge>
                 <span v-else class="text-grey">-</span>
               </q-td>
             </template>
@@ -706,7 +706,7 @@
             <template v-slot:body-cell-sshkey="props">
               <q-td :props="props">
                 <q-btn v-if="props.row.ssh_kind" dense flat size="sm" color="primary" icon="vpn_key" label="Show Key"
-                       @click="showCredential(props.row.code)" :loading="loadingCredFor === props.row.code" />
+                       @click="showCredential(props.row.code)" :loading="loadingCredFor === props.row.code"></q-btn>
                 <span v-else class="text-grey">no key</span>
               </q-td>
             </template>
@@ -722,26 +722,26 @@
       <q-card-section class="row items-center">
         <div class="text-h6">Device SSH Credential</div>
         <q-space></q-space>
-        <q-btn flat dense icon="close" v-close-popup />
+        <q-btn flat dense icon="close" v-close-popup></q-btn>
       </q-card-section>
       <q-card-section v-if="cred">
         <div class="text-caption text-grey q-mb-sm">
           Code <code>${ cred.code }</code> &mdash; device <strong>${ cred.device }</strong>, version ${ cred.version }
-          &mdash; kind <q-badge :label="cred.kind" color="teal" />
+          &mdash; kind <q-badge :label="cred.kind" color="teal"></q-badge>
           <span v-if="cred.device_mac"> &mdash; MAC <code>${ cred.device_mac }</code></span>
         </div>
 
         <div class="text-subtitle2 q-mt-md">Public key (on the device's authorized_keys)</div>
-        <q-input v-model="cred.pub" type="textarea" readonly autogrow filled dense class="q-mb-xs" style="font-family:monospace; font-size:0.8rem;" />
-        <q-btn dense flat size="sm" icon="content_copy" label="Copy public key" @click="copyText(cred.pub)" color="primary" />
+        <q-input v-model="cred.pub" type="textarea" readonly autogrow filled dense class="q-mb-xs" style="font-family:monospace; font-size:0.8rem;"></q-input>
+        <q-btn dense flat size="sm" icon="content_copy" label="Copy public key" @click="copyText(cred.pub)" color="primary"></q-btn>
 
         <q-banner dense class="bg-orange-1 text-orange-10 q-my-md" rounded>
-          <template v-slot:avatar><q-icon name="warning" /></template>
+          <template v-slot:avatar><q-icon name="warning"></q-icon></template>
           The PRIVATE key below is how you SSH into this device. Keep it secret — anyone with it can log in.
         </q-banner>
         <div class="text-subtitle2">Private key (owner recovery — SSH in with <code>ssh -i keyfile root@&lt;miner-ip&gt;</code>)</div>
-        <q-input v-model="cred.secret" type="textarea" readonly autogrow filled dense class="q-mb-xs" style="font-family:monospace; font-size:0.75rem;" />
-        <q-btn dense flat size="sm" icon="content_copy" label="Copy private key" @click="copyText(cred.secret)" color="primary" />
+        <q-input v-model="cred.secret" type="textarea" readonly autogrow filled dense class="q-mb-xs" style="font-family:monospace; font-size:0.75rem;"></q-input>
+        <q-btn dense flat size="sm" icon="content_copy" label="Copy private key" @click="copyText(cred.secret)" color="primary"></q-btn>
 
         <div class="text-caption text-grey q-mt-md">
           Issued: ${ formatDate(cred.created_at) }
