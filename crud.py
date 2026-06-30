@@ -817,6 +817,24 @@ async def set_flash_code_device_mac(code: str, device_mac: str) -> None:
     )
 
 
+async def get_current_key_for_mac(device_mac: str) -> Optional[FlashCode]:
+    """Return the device's CURRENT SSH credential row: the most-recently-created
+    flash_codes row for this MAC that actually holds a private key (ssh_secret).
+    Used by /flash/device-key for the update re-login — matches the ROTATE
+    invariant 'current key = latest paid row for this MAC'. MAC match is exact
+    (the flasher sends lowercase aa:bb:cc:dd:ee:ff, same as report-device stored)."""
+    row = await db.fetchone(
+        """
+        SELECT * FROM tnaflasher.flash_codes
+        WHERE device_mac = :mac AND ssh_secret IS NOT NULL AND ssh_secret != ''
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        {"mac": device_mac}
+    )
+    return FlashCode(**row) if row else None
+
+
 async def get_flash_code_by_code(code: str) -> Optional[FlashCode]:
     """Get a flash code by its code string"""
     row = await db.fetchone(

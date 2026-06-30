@@ -65,6 +65,7 @@ from .crud import (
     get_all_flash_codes,
     stamp_ssh_fetched,
     set_flash_code_device_mac,
+    get_current_key_for_mac,
 )
 from .services import (
     get_available_devices,
@@ -445,6 +446,67 @@ async def api_report_device(
             device_mac=mac
         )
     return {"ok": True}
+
+
+@tnaflasher_api_router.get("/flash/device-key")
+async def api_get_device_key(
+    code: str = Query(...),
+    mac: str = Query(...),
+    request: Request = None
+):
+    """Update re-login: hand the flasher a locked TNA-OS miner's CURRENT private key
+    so it can SSH in (key-only) to update it. The flasher identifies the miner by its
+    MAC (sourced from the miner's HTTP /api/system/info macAddr, fallback ARP) and
+    authorises with a fresh PAID update code. This is the ONE place the private key
+    leaves the server over the public channel — hard-gated. See PER-PAYMENT-SSH-KEY §Task 2.
+
+    Flow: verify the update code is paid+valid -> find the most-recent paid row whose
+    device_mac == mac and that holds a private key -> return that key. ROTATE: the
+    flasher then installs the NEW code's pub on the device, so the next update resolves
+    to the new code's row (most-recent-wins)."""
+    client_ip = request.client.host if request and request.client else "unknown"
+    within_limit = await check_rate_limit(client_ip, "device-key", max_attempts=20, window_seconds=3600)
+    if not within_limit:
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+    await record_rate_limit_attempt(client_ip, "device-key")
+
+    # Gate on the fresh paid update code (existing + not expired; mid-session so
+    # check_used=False, same as ssh-key — the update code may already be marked used).
+    result = await verify_flash_code(code.upper(), check_used=False)
+    if not result.get("valid"):
+        raise HTTPException(status_code=403, detail=result.get("error", "Invalid or expired flash code"))
+
+    mac_norm = mac.strip().lower()
+    if not mac_norm:
+        raise HTTPException(status_code=400, detail="mac is required")
+
+    device_row = await get_current_key_for_mac(mac_norm)
+    if not device_row or not device_row.ssh_secret:
+        # No prior key on file for this MAC (e.g. miner flashed before MAC capture
+        # shipped). The flasher can't auto-login; owner recovers manually via the
+        # admin credential endpoint. 404 so the flasher reports a clear failure.
+        raise HTTPException(
+            status_code=404,
+            detail="No SSH key on record for this device MAC. Owner must recover via the admin panel."
+        )
+
+    # Audit the private-key release — reference only, NEVER the key itself.
+    await create_audit_log(
+        wallet_id="public",
+        action="device_key_fetched",
+        details=f"UpdateCode: {code.upper()}, MAC: {mac_norm}, KeyFromCode: {device_row.code}, IP: {client_ip}",
+        device_mac=mac_norm
+    )
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content={
+            "username": device_row.ssh_username or "root",
+            "kind": device_row.ssh_kind or "ed25519",
+            "secret": device_row.ssh_secret,   # the PRIVATE key to log in with
+        },
+        headers={"Cache-Control": "no-store"}
+    )
 
 
 @tnaflasher_api_router.get("/admin/flash-codes")
