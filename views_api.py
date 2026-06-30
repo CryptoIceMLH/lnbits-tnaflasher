@@ -487,6 +487,7 @@ async def api_admin_get_credential(
         "payment_hash": fc.payment_hash,
         "device": fc.device,
         "version": fc.version,
+        "created_at": fc.created_at,
         "username": fc.ssh_username,
         "kind": fc.ssh_kind,
         "pub": fc.ssh_pub,

@@ -691,11 +691,65 @@
                 <code style="font-size:0.9em; letter-spacing:1px;">${ props.row.code }</code>
               </q-td>
             </template>
+            <template v-slot:body-cell-ssh_kind="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.ssh_kind" :color="props.row.ssh_kind === 'ed25519' ? 'teal' : 'orange'" :label="props.row.ssh_kind" />
+                <span v-else class="text-grey">-</span>
+              </q-td>
+            </template>
+            <template v-slot:body-cell-device_mac="props">
+              <q-td :props="props">
+                <code v-if="props.row.device_mac" style="font-size:0.85em;">${ props.row.device_mac }</code>
+                <span v-else class="text-grey">-</span>
+              </q-td>
+            </template>
+            <template v-slot:body-cell-sshkey="props">
+              <q-td :props="props">
+                <q-btn v-if="props.row.ssh_kind" dense flat size="sm" color="primary" icon="vpn_key" label="Show Key"
+                       @click="showCredential(props.row.code)" :loading="loadingCredFor === props.row.code" />
+                <span v-else class="text-grey">no key</span>
+              </q-td>
+            </template>
           </q-table>
         </div>
       </q-card-section>
     </q-card>
   </div>
+
+  <!-- SSH Credential dialog (owner recovery — shows the device's private key) -->
+  <q-dialog v-model="credDialog">
+    <q-card style="min-width:520px; max-width:90vw;">
+      <q-card-section class="row items-center">
+        <div class="text-h6">Device SSH Credential</div>
+        <q-space></q-space>
+        <q-btn flat dense icon="close" v-close-popup />
+      </q-card-section>
+      <q-card-section v-if="cred">
+        <div class="text-caption text-grey q-mb-sm">
+          Code <code>${ cred.code }</code> &mdash; device <strong>${ cred.device }</strong>, version ${ cred.version }
+          &mdash; kind <q-badge :label="cred.kind" color="teal" />
+          <span v-if="cred.device_mac"> &mdash; MAC <code>${ cred.device_mac }</code></span>
+        </div>
+
+        <div class="text-subtitle2 q-mt-md">Public key (on the device's authorized_keys)</div>
+        <q-input v-model="cred.pub" type="textarea" readonly autogrow filled dense class="q-mb-xs" style="font-family:monospace; font-size:0.8rem;" />
+        <q-btn dense flat size="sm" icon="content_copy" label="Copy public key" @click="copyText(cred.pub)" color="primary" />
+
+        <q-banner dense class="bg-orange-1 text-orange-10 q-my-md" rounded>
+          <template v-slot:avatar><q-icon name="warning" /></template>
+          The PRIVATE key below is how you SSH into this device. Keep it secret — anyone with it can log in.
+        </q-banner>
+        <div class="text-subtitle2">Private key (owner recovery — SSH in with <code>ssh -i keyfile root@&lt;miner-ip&gt;</code>)</div>
+        <q-input v-model="cred.secret" type="textarea" readonly autogrow filled dense class="q-mb-xs" style="font-family:monospace; font-size:0.75rem;" />
+        <q-btn dense flat size="sm" icon="content_copy" label="Copy private key" @click="copyText(cred.secret)" color="primary" />
+
+        <div class="text-caption text-grey q-mt-md">
+          Issued: ${ formatDate(cred.created_at) }
+          &mdash; key fetched by flasher: ${ cred.ssh_fetched_at ? formatDate(cred.ssh_fetched_at) : 'not yet' }
+        </div>
+      </q-card-section>
+    </q-card>
+  </q-dialog>
 
   <!-- Activity Log -->
   <div class="col-12">
@@ -889,7 +943,14 @@
           { name: 'expires_at', label: 'Expires', field: 'expires_at', align: 'left', sortable: true },
           { name: 'used_at', label: 'Used At', field: 'used_at', align: 'left', sortable: true },
           { name: 'used_ip', label: 'Used From IP', field: 'used_ip', align: 'left' },
+          { name: 'ssh_kind', label: 'Key', field: 'ssh_kind', align: 'left' },
+          { name: 'device_mac', label: 'Device MAC', field: 'device_mac', align: 'left' },
+          { name: 'sshkey', label: 'SSH Credential', field: 'sshkey', align: 'left' },
         ],
+        // SSH credential dialog state
+        credDialog: false,
+        cred: null,
+        loadingCredFor: null,
         // Activity Log
         activityLog: [],
         loadingActivity: false,
@@ -902,6 +963,9 @@
           { label: 'SSH Flash Started', value: 'ssh_flash_started' },
           { label: 'Firmware Download', value: 'firmware_download' },
           { label: 'Flash Complete', value: 'flash_complete' },
+          { label: 'SSH Key Issued', value: 'ssh_credential_issued' },
+          { label: 'SSH Key Fetched', value: 'ssh_credential_fetched' },
+          { label: 'Device Reported', value: 'device_reported' },
         ],
         activityColumns: [
           { name: 'created_at', label: 'Date', field: 'created_at', align: 'left', sortable: true, style: 'width:150px' },
@@ -1541,6 +1605,30 @@
         } finally {
           this.loadingFlashCodes = false
         }
+      },
+
+      async showCredential(code) {
+        this.loadingCredFor = code
+        try {
+          const res = await LNbits.api.request(
+            'GET',
+            '/tnaflasher/api/v1/admin/flash-codes/' + encodeURIComponent(code) + '/credential',
+            this.g.user.wallets[0].adminkey
+          )
+          this.cred = res.data
+          this.credDialog = true
+        } catch(e) {
+          console.error('showCredential', e)
+          this.$q.notify({ type: 'negative', message: 'Could not load credential: ' + (e.message || e) })
+        } finally {
+          this.loadingCredFor = null
+        }
+      },
+
+      copyText(text) {
+        if (!text) return
+        navigator.clipboard.writeText(text)
+        this.$q.notify({ type: 'positive', message: 'Copied to clipboard' })
       },
 
       async loadActivityLog() {
