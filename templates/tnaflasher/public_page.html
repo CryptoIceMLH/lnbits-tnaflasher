@@ -303,12 +303,12 @@
           </q-card-section>
         </q-card>
 
-        <!-- Step 1: Canaan Nano 3s (WebUSB / K230) - in-browser, BOOT mode -->
+        <!-- Step 1: Canaan Avalon (WebUSB / K230) - in-browser, BOOT mode -->
         <q-card v-if="walletValid && devices.length > 0 && isWebUSBDevice" class="q-mb-md tna-card">
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge color="primary" class="q-mr-sm">1</q-badge>
-              <span class="text-h6 text-tna-primary">Canaan Nano 3s (USB Flash)</span>
+              <span class="text-h6 text-tna-primary">Canaan Avalon (USB Flash)</span>
             </div>
             <div class="text-tna-secondary q-mb-md">
               This device flashes <strong class="text-tna-accent">directly in your browser</strong> over USB —
@@ -329,9 +329,9 @@
 
             <!-- BOOT-mode steps -->
             <div class="q-pa-md q-mb-md" style="background: rgba(247,147,26,0.08); border: 1px solid rgba(247,147,26,0.4); border-radius: 8px;">
-              <div class="text-subtitle2 text-tna-accent q-mb-sm">Put the Nano 3s into BOOT mode:</div>
+              <div class="text-subtitle2 text-tna-accent q-mb-sm">Put the Avalon into BOOT mode:</div>
               <ol style="margin: 0; padding-left: 1.4em; color: var(--text-secondary); line-height: 1.8; font-size: 0.9rem;">
-                <li>Power <strong>off</strong> the Nano 3s.</li>
+                <li>Power <strong>off</strong> the Avalon.</li>
                 <li>Hold the small <strong class="text-tna-accent">recovery / BOOT button</strong> next to the USB-C port.</li>
                 <li>While holding it, plug in the <strong class="text-tna-accent">double-A USB cable</strong> (USB-A both ends) to your PC.</li>
                 <li>Power on, then <strong>release the button after ~2 seconds</strong>.</li>
@@ -369,7 +369,7 @@
               <q-checkbox v-model="webusbAckDriver" dark dense class="text-tna-secondary" style="display:block;"
                 label="Windows only: I've bound the WinUSB driver to device 29F1:0230 with Zadig (skip on macOS/Linux)." />
               <q-checkbox v-model="webusbAckBoot" dark dense class="text-tna-secondary" style="display:block;"
-                label="My Nano 3s is in BOOT mode (recovery button held while plugging in USB) and connected to this PC." />
+                label="My Avalon is in BOOT mode (recovery button held while plugging in USB) and connected to this PC." />
               <div v-if="!webusbReady" class="text-tna-muted q-mt-sm" style="font-size:0.82rem;">
                 Tick all three to enable the Flash step after payment. We also re-check the device is live and in
                 BOOT mode <strong>before</strong> your code is used — so a not-ready device never burns it.
@@ -709,7 +709,7 @@
           <q-card-section>
             <div class="row items-center q-mb-md">
               <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
-              <span class="text-h6 text-tna-primary">Flash Your Nano 3s</span>
+              <span class="text-h6 text-tna-primary">Flash Your Avalon</span>
             </div>
 
             <!-- Reminder: prerequisites were confirmed in step 1; Flash is enabled once paid + checklist done -->
@@ -795,7 +795,7 @@
             <div v-if="flashComplete" class="text-center">
               <div class="status-connected" style="font-size: 3em;">✓</div>
               <div class="text-h6 status-connected q-mt-sm">Flash Complete!</div>
-              <p class="text-tna-muted q-mt-sm">Your Nano 3s is rebooting into TNA-OS.</p>
+              <p class="text-tna-muted q-mt-sm">Your Avalon is rebooting into TNA-OS.</p>
               <q-btn flat label="Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
             </div>
 
@@ -857,7 +857,7 @@
     window.ESPLoader = ESPLoader;
     window.Transport = Transport;
   </script>
-  <!-- Canaan K230 (Nano 3s) WebUSB flasher — kdimg parser must load first.
+  <!-- Canaan K230 (Avalon) WebUSB flasher — kdimg parser must load first.
        ?v= cache-busts per release so updated JS isn't served stale. -->
   <script src="/tnaflasher/static/js/kdimg-parser.js?v={{ cache_bust }}"></script>
   <script src="/tnaflasher/static/js/k230-flasher.js?v={{ cache_bust }}"></script>
@@ -953,7 +953,7 @@
           downgradeMtime: 0,
           loaderMtime: 0,
 
-          // WebUSB (Canaan K230 / Nano 3s) flash state
+          // WebUSB (Canaan K230 / Avalon) flash state
           webusbFlasher: null,      // K230Flasher instance during a flash
           webusbPhase: '',          // 'loader' | 'erase' | 'write'
           webusbPartName: '',
@@ -1488,7 +1488,7 @@
             this.flashComplete = true
             this.flashing = false
             this.flashStatus = 'Complete'
-            this.notify('positive', 'Flash complete! Your Nano 3s is rebooting.')
+            this.notify('positive', 'Flash complete! Your Avalon is rebooting.')
             try {
               await api.request('POST', `/tnaflasher/api/v1/flash/complete/${this.paymentHash}?wallet_id=${WALLET_ID}`)
             } catch (e) { /* non-fatal */ }
