@@ -1733,6 +1733,9 @@
   // Stub $t so Quasar internal i18n calls don't throw
   window.app.config.globalProperties.$t = (key) => key
 
-  window.app.mount('#vue')
+  // NOTE: do NOT call window.app.mount('#vue') here. The LNbits base template
+  // mounts window.app itself, AFTER it sets up the user/g context. Mounting early
+  // (before that context exists) leaves windowMixin's g.user undefined and
+  // white-pages the admin page. The canonical example extension also does not mount.
 </script>
 {% endblock %}
