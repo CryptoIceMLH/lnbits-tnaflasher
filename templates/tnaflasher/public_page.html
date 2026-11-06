@@ -381,6 +381,43 @@
           </q-card-section>
         </q-card>
 
+        <!-- Step 1: RP2350 (WebUSB / PICOBOOT) - in-browser, BOOT mode -->
+        <q-card v-if="walletValid && devices.length > 0 && isPicobootDevice" class="q-mb-md tna-card">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge color="primary" class="q-mr-sm">1</q-badge>
+              <span class="text-h6 text-tna-primary">RP2350 Device (USB Flash)</span>
+            </div>
+            <div class="text-tna-secondary q-mb-md">
+              This device flashes <strong class="text-tna-accent">directly in your browser</strong> over USB.
+              There's nothing to download or run.
+            </div>
+
+            <div class="q-pa-md q-mb-md" style="background: rgba(247,147,26,0.08); border: 1px solid rgba(247,147,26,0.4); border-radius: 8px;">
+              <div class="text-subtitle2 text-tna-accent q-mb-sm">Put the device into BOOT mode:</div>
+              <ol style="margin: 0; padding-left: 1.4em; color: var(--text-secondary); line-height: 1.8; font-size: 0.9rem;">
+                <li>Unplug the USB cable.</li>
+                <li>Hold the <strong class="text-tna-accent">BOOT button</strong>.</li>
+                <li>While holding it, plug the USB cable into your PC, then release the button.</li>
+                <li>A USB drive named <code style="color:var(--accent);">RP2350</code> appears. You can ignore it.</li>
+              </ol>
+            </div>
+
+            <div v-if="!isWebUSBSupported" class="q-pa-md q-mb-md" style="background: rgba(255,107,107,0.1); border: 1px solid #ff6b6b; border-radius: 8px;">
+              <div class="text-weight-bold" style="color:#ff6b6b;">WebUSB not available in this browser</div>
+              <div class="text-tna-secondary" style="font-size:0.88rem;">Use Chrome, Edge, Brave, or Opera on desktop. Firefox and Safari do not support WebUSB.</div>
+            </div>
+
+            <div class="q-pa-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px;">
+              <div class="text-weight-bold text-tna-accent q-mb-sm">Confirm before you continue:</div>
+              <q-checkbox v-model="picobootAckBrowser" dark dense class="text-tna-secondary" style="display:block;"
+                label="I'm using Chrome, Edge, Brave, or Opera on desktop (not Firefox, Safari or mobile)." />
+              <q-checkbox v-model="picobootAckBoot" dark dense class="text-tna-secondary" style="display:block;"
+                label="My device is in BOOT mode and connected to this PC." />
+            </div>
+          </q-card-section>
+        </q-card>
+
         <!-- Step 2: Select Device & Firmware -->
         <q-card v-if="walletValid && devices.length > 0" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !isNoConnectDevice && !connected }">
           <q-card-section>
@@ -806,6 +843,71 @@
           </q-card-section>
         </q-card>
 
+        <!-- Step 4: Flash (WebUSB / RP2350 PICOBOOT) -->
+        <q-card v-if="walletValid && devices.length > 0 && isPicobootDevice" class="q-mb-md tna-card" :class="{ 'tna-card-disabled': !paid }">
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-badge :color="paid ? 'primary' : 'grey'" class="q-mr-sm">4</q-badge>
+              <span class="text-h6 text-tna-primary">Flash Your Device</span>
+            </div>
+
+            <div v-if="!flashing && !flashComplete && picobootReady" class="q-mb-md q-pa-md" style="background: rgba(247, 147, 26, 0.1); border: 1px solid var(--accent); border-radius: 8px;">
+              <div class="text-tna-secondary" style="font-size:0.86rem;">
+                When you click Flash, your browser asks you to pick <code>RP2350 Boot</code>.
+                <strong class="text-tna-accent">Do not unplug</strong> during flashing. The device restarts on its own.
+              </div>
+            </div>
+
+            <!-- Shown only after the browser fails to claim the device -->
+            <div v-if="picobootDriverHelp && !flashing && !flashComplete" class="q-mb-md q-pa-md" style="background: rgba(255,107,107,0.12); border: 1px solid #ff6b6b; border-radius: 8px;">
+              <div class="text-weight-bold q-mb-sm" style="color:#ff6b6b;">Couldn't access the device</div>
+              <div class="text-tna-secondary q-mb-sm" style="font-size:0.88rem; line-height:1.6;">
+                Close any other flashing tool and try again. On <strong>Windows</strong>, if it still fails,
+                the <strong>WinUSB</strong> driver isn't bound. Fix it once with Zadig:
+              </div>
+              <ol class="text-tna-secondary q-ma-none q-pl-md" style="line-height:1.8; font-size:0.88rem;">
+                <li>Download and run <a href="https://zadig.akeo.ie/" target="_blank" class="text-tna-accent">Zadig</a>, keeping the device in BOOT mode.</li>
+                <li>Choose <strong>Options → List All Devices</strong>, then select <code style="color:var(--accent);">RP2350 Boot</code> interface 1 (USB ID <code>2E8A 000F</code>). Don't change interface 0, which is the USB drive.</li>
+                <li>Set the driver to <strong>WinUSB</strong> and click <strong>Replace Driver</strong> or <strong>Install Driver</strong>.</li>
+                <li>Come back here and click <strong class="text-tna-accent">Flash Now</strong> again.</li>
+              </ol>
+            </div>
+
+            <div v-if="!flashing && !flashComplete" class="text-center">
+              <q-btn
+                color="primary"
+                label="Flash Now"
+                @click="startPicobootFlash"
+                :disable="!paid || !flashToken || !picobootReady"
+                size="lg"
+              >
+                <q-tooltip v-if="!picobootReady">Confirm both items in step 1 first</q-tooltip>
+              </q-btn>
+            </div>
+
+            <div v-if="flashing">
+              <q-linear-progress :value="flashProgress / 100" size="25px" color="orange" class="q-mb-md">
+                <div class="absolute-full flex flex-center">
+                  <q-badge color="dark" text-color="orange" :label="flashProgress + '%'" />
+                </div>
+              </q-linear-progress>
+              <div class="text-center text-caption text-tna-secondary">${ flashStatus }</div>
+              <div class="text-center text-caption text-tna-muted q-mt-xs">Keep the device plugged in and don't refresh.</div>
+            </div>
+
+            <div v-if="flashComplete" class="text-center">
+              <div class="status-connected" style="font-size: 3em;">✓</div>
+              <div class="text-h6 status-connected q-mt-sm">Flash Complete!</div>
+              <p class="text-tna-muted q-mt-sm">Your device is restarting with the new firmware.</p>
+              <q-btn flat label="Flash Another Device" @click="resetAll" class="q-mt-md text-tna-accent" />
+            </div>
+
+            <div v-if="!paid" class="text-center text-tna-muted q-pa-md">
+              Complete step 3 above to enable flashing.
+            </div>
+          </q-card-section>
+        </q-card>
+
         <!-- Terminal Output -->
         <q-card v-if="walletValid && terminalOutput.length > 0" class="tna-card">
           <q-card-section>
@@ -861,6 +963,7 @@
        ?v= cache-busts per release so updated JS isn't served stale. -->
   <script src="/tnaflasher/static/js/kdimg-parser.js?v={{ cache_bust }}"></script>
   <script src="/tnaflasher/static/js/k230-flasher.js?v={{ cache_bust }}"></script>
+  <script src="/tnaflasher/static/js/rp2350-flasher.js?v={{ cache_bust }}"></script>
   <script>
     const WALLET_ID = '{{ wallet_id }}'
     const API_BASE = window.location.origin
@@ -966,6 +1069,9 @@
           webusbDriverHelp: false,  // show inline Zadig help after a claim failure
           webusbNeedsRepick: false, // loader-mode device must be re-selected (user gesture)
           _webusbRepickResolve: null, // resolver for the re-pick promise
+          picobootAckBrowser: false, // RP2350: using a supported browser
+          picobootAckBoot: false,    // RP2350: device is in BOOT mode + USB connected
+          picobootDriverHelp: false, // RP2350: show Zadig help after a claim failure
 
           // Notifications
           notification: null
@@ -1035,10 +1141,18 @@
           return this.selectedDeviceInfo && this.selectedDeviceInfo.flash_method === 'webusb'
         },
 
+        isPicobootDevice() {
+          return this.selectedDeviceInfo && this.selectedDeviceInfo.flash_method === 'picoboot'
+        },
+
         // True for any method that needs no in-browser serial connection before
-        // firmware selection (SSH = network, WebUSB = device picked at flash time).
+        // firmware selection (SSH = network, WebUSB/PICOBOOT = device picked at flash time).
         isNoConnectDevice() {
-          return this.isSSHDevice || this.isWebUSBDevice
+          return this.isSSHDevice || this.isWebUSBDevice || this.isPicobootDevice
+        },
+
+        picobootReady() {
+          return this.isWebUSBSupported && this.picobootAckBrowser && this.picobootAckBoot
         },
 
         kdimgUrl() {
@@ -1502,6 +1616,88 @@
           }
         },
 
+        async startPicobootFlash() {
+          if (!this.flashToken) {
+            this.notify('negative', 'No payment token available')
+            return
+          }
+          if (!this.picobootReady) {
+            this.notify('warning', 'Please confirm both items in step 1 first.')
+            return
+          }
+          if (typeof window.RP2350Flasher === 'undefined') {
+            this.notify('negative', 'Flasher failed to load. Refresh and try again.')
+            return
+          }
+
+          const flasher = new window.RP2350Flasher({
+            onLog: (m) => this.log(m),
+            onProgress: (p) => {
+              // Write and erase take 0-80%, read-back verify takes 80-100%.
+              const frac = p.total ? p.current / p.total : 0
+              this.flashProgress = p.phase === 'verify'
+                ? 80 + Math.round(frac * 20)
+                : Math.round(frac * 80)
+              this.flashStatus = p.phase === 'verify' ? 'Verifying…' : 'Writing firmware…'
+            }
+          })
+
+          this.flashComplete = false
+          this.flashProgress = 0
+          this.picobootDriverHelp = false
+
+          // Prove the device answers before the firmware download uses the token.
+          try {
+            await flasher.requestDevice()
+          } catch (e) {
+            this.notify('negative', 'No device selected. Put it in BOOT mode, then pick RP2350 Boot.')
+            return
+          }
+          this.flashing = true
+          this.flashStatus = 'Checking your device…'
+          try {
+            await flasher.connectAndVerify()
+          } catch (e) {
+            this.flashing = false
+            this.flashStatus = ''
+            const msg = e.message || String(e)
+            this.log('readiness check failed: ' + msg)
+            if (/claim|driver|winusb|access|SecurityError|NotFoundError/i.test(msg)) {
+              this.picobootDriverHelp = true
+              this.notify('negative', 'Could not access the device. See the help below.')
+            } else {
+              this.notify('negative', msg)
+            }
+            await flasher._close()
+            return
+          }
+
+          try {
+            this.flashStatus = 'Device ready. Downloading firmware…'
+            const resp = await fetch(this.kdimgUrl, { cache: 'no-store' })
+            if (!resp.ok) throw new Error('firmware download failed (' + resp.status + ')')
+            const uf2 = await resp.arrayBuffer()
+
+            this.flashStatus = 'Writing firmware…'
+            await flasher.flashImage(uf2)
+
+            this.flashProgress = 100
+            this.flashComplete = true
+            this.flashStatus = 'Complete'
+            this.notify('positive', 'Flash complete! Your device is restarting.')
+            try {
+              await api.request('POST', `/tnaflasher/api/v1/flash/complete/${this.paymentHash}?wallet_id=${WALLET_ID}`)
+            } catch (e) { /* non-fatal */ }
+          } catch (e) {
+            this.flashStatus = 'Failed'
+            this.log('ERROR: ' + (e.message || e))
+            await flasher._close()
+            this.notify('negative', 'Flash failed: ' + (e.message || e) + '. Put the device back in BOOT mode and click Flash Now again.')
+          } finally {
+            this.flashing = false
+          }
+        },
+
         onWebUSBProgress(p) {
           // p: { phase, partName, current, total, partsDone, partsTotal }
           this.webusbPhase = p.phase || this.webusbPhase
@@ -1691,6 +1887,10 @@
           this.webusbDriverHelp = false
           this.webusbNeedsRepick = false
           this._webusbRepickResolve = null
+          // Reset RP2350 flash state
+          this.picobootAckBrowser = false
+          this.picobootAckBoot = false
+          this.picobootDriverHelp = false
         }
       },
 

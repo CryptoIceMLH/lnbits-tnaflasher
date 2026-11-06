@@ -208,7 +208,7 @@
           <div class="col-12 col-sm-3">
             <q-select
               v-model="newPromoDeviceType"
-              :options="[{label:'All',value:'both'},{label:'WebSerial Only',value:'webserial'},{label:'SSH Only',value:'ssh'},{label:'WebUSB Only',value:'webusb'}]"
+              :options="[{label:'All',value:'both'},{label:'WebSerial Only',value:'webserial'},{label:'SSH Only',value:'ssh'},{label:'WebUSB Only',value:'webusb'},{label:'RP2350 Only',value:'picoboot'}]"
               label="Device Type"
               outlined
               dense
@@ -298,7 +298,7 @@
           <div class="col-auto">
             <q-select
               v-model="newMinerFlashMethod"
-              :options="[{label: 'WebSerial (ESP32)', value: 'webserial'}, {label: 'SSH (ASIC/Network)', value: 'ssh'}, {label: 'WebUSB (Canaan K230)', value: 'webusb'}]"
+              :options="[{label: 'WebSerial (ESP32)', value: 'webserial'}, {label: 'SSH (ASIC/Network)', value: 'ssh'}, {label: 'WebUSB (Canaan K230)', value: 'webusb'}, {label: 'WebUSB (RP2350)', value: 'picoboot'}]"
               label="Flash Method"
               outlined
               dense
@@ -1007,22 +1007,25 @@
         return new Intl.NumberFormat().format(sats)
       },
 
-      // Flash-method display + per-method firmware file rules (webserial/ssh/webusb)
+      // Flash-method display + per-method firmware file rules (webserial/ssh/webusb/picoboot)
       minerMethodBadge(method) {
         if (method === 'ssh') return { color: 'blue', label: 'SSH' }
         if (method === 'webusb') return { color: 'purple', label: 'WebUSB' }
+        if (method === 'picoboot') return { color: 'teal', label: 'RP2350' }
         return { color: 'orange', label: 'WebSerial' }
       },
 
       firmwareFileLabel(method) {
         if (method === 'ssh') return 'Select .tar.gz file'
         if (method === 'webusb') return 'Select .kdimg file'
+        if (method === 'picoboot') return 'Select .uf2 file'
         return 'Select .bin file'
       },
 
       firmwareFileAccept(method) {
         if (method === 'ssh') return '.tar.gz,.tgz'
         if (method === 'webusb') return '.kdimg'
+        if (method === 'picoboot') return '.uf2'
         return '.bin'
       },
 

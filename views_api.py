@@ -5,6 +5,7 @@ from lnbits.decorators import check_admin
 from pathlib import Path
 from typing import Optional
 
+from .helpers import validate_rp2350_uf2
 from .models import (
     CreateFlashRequest,
     FlashInvoiceResponse,
@@ -876,6 +877,10 @@ async def api_admin_upload_firmware(
         if not file.filename.lower().endswith(".kdimg"):
             raise HTTPException(status_code=400, detail="WebUSB (K230) miners require .kdimg firmware files")
         file_ext = ".kdimg"
+    elif miner.flash_method == "picoboot":
+        if not file.filename.lower().endswith(".uf2"):
+            raise HTTPException(status_code=400, detail="PICOBOOT (RP2350) devices require .uf2 firmware files")
+        file_ext = ".uf2"
     else:
         if not file.filename.endswith(".bin"):
             raise HTTPException(status_code=400, detail="WebSerial miners require .bin firmware files")
@@ -891,6 +896,12 @@ async def api_admin_upload_firmware(
             raise HTTPException(status_code=400, detail="kdimg too small (< 1 MiB) — upload looks truncated")
         if len(content) < 4 or int.from_bytes(content[:4], "little") != 0x27CB8F93:
             raise HTTPException(status_code=400, detail="Not a valid .kdimg (bad file magic, expected 0x27CB8F93)")
+
+    if miner.flash_method == "picoboot":
+        try:
+            validate_rp2350_uf2(content)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     # Create miner directory if needed
     firmware_dir = get_firmware_dir()

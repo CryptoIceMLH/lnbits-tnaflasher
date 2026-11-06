@@ -24,6 +24,7 @@ from .crud import (
     create_flash_code as crud_create_flash_code,
     get_flash_code_by_payment_hash,
 )
+from .helpers import load_or_create_secret
 
 
 # Token expiry time (5 minutes)
@@ -32,8 +33,20 @@ TOKEN_EXPIRY_SECONDS = 300
 # Flash code expiry time (30 minutes)
 FLASH_CODE_EXPIRY_SECONDS = 1800
 
-# Secret for signing tokens (in production, use environment variable)
-TOKEN_SECRET = os.environ.get("TNAFLASHER_SECRET", "change-this-secret-in-production")
+_token_secret: Optional[str] = None
+
+
+def _get_token_secret() -> str:
+    """Return the token signing secret: TNAFLASHER_SECRET if set, else a stored random one.
+
+    Raises if neither is available, so tokens are never signed with a guessable key.
+    """
+    global _token_secret
+    if _token_secret is None:
+        _token_secret = os.environ.get("TNAFLASHER_SECRET") or load_or_create_secret(
+            Path(settings.lnbits_data_folder) / "tnaflasher" / "token_secret"
+        )
+    return _token_secret
 
 
 def get_firmware_dir() -> Path:
@@ -242,7 +255,7 @@ def generate_flash_token(payment_hash: str, device: str, version: str) -> str:
 
     # Create signature
     signature = hmac.new(
-        TOKEN_SECRET.encode(),
+        _get_token_secret().encode(),
         payload_json.encode(),
         hashlib.sha256
     ).hexdigest()
@@ -267,7 +280,7 @@ def verify_flash_token(token: str) -> Optional[dict]:
 
         # Verify signature
         expected_sig = hmac.new(
-            TOKEN_SECRET.encode(),
+            _get_token_secret().encode(),
             payload_json.encode(),
             hashlib.sha256
         ).hexdigest()

@@ -100,7 +100,7 @@ class PromoCode(BaseModel):
     used_count: int = 0
     active: bool = True
     created_at: Optional[int] = None
-    device_type: str = "both"  # "webserial", "ssh", "webusb", or "both"
+    device_type: str = "both"  # "webserial", "ssh", "webusb", "picoboot", or "both"
 
 
 class CreatePromoCode(BaseModel):
@@ -129,7 +129,7 @@ class Miner(BaseModel):
     """Miner device type"""
     id: str
     name: str
-    flash_method: str = "webserial"  # "webserial" (ESP32 Web Serial), "ssh" (ASIC/network), or "webusb" (Canaan K230 WebUSB/.kdimg)
+    flash_method: str = "webserial"  # "webserial" (ESP32 Web Serial), "ssh" (ASIC/network), "webusb" (Canaan K230 WebUSB/.kdimg), or "picoboot" (RP2350 WebUSB/.uf2)
     created_at: Optional[int] = None
 
 
